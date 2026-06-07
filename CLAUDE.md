@@ -62,29 +62,40 @@ other entities will come later.
 - Never return raw entities with secrets to callers without thinking about
   exposure (see the auth warning above).
 
+### OpenAPI annotations
+
+This service's OpenAPI spec is consumed by `fantasy-bff` to generate a typed
+HTTP client. Keeping annotations accurate is a first-class requirement.
+
+- Annotate every controller with `@Tag(name = "...")`.
+- Annotate every handler method with `@Operation(summary = "...")` and one
+  `@ApiResponse` per distinct HTTP status it can return.
+- Annotate every DTO record field with
+  `@Schema(requiredMode = Schema.RequiredMode.REQUIRED)` unless the field is
+  genuinely optional. This ensures the generated TypeScript client in
+  `fantasy-web` gets non-nullable fields.
+- Collections (`List`, `Set`) are always required — never leave them unannotated.
+- After adding or changing an endpoint, verify Swagger UI at
+  `http://localhost:8086/swagger-ui.html` reflects the change correctly before
+  opening a PR.
+
+### Spec snapshot (`specs/openapi.yaml`)
+
+`specs/openapi.yaml` is a committed snapshot of the live OpenAPI spec, consumed by
+`fantasy-bff` to generate its typed client. `OpenApiSpecSnapshotTest` boots the app
+and asserts the committed spec matches the running one, so **any controller/DTO
+change that isn't reflected in the spec fails the build**.
+
+After an intentional API change, regenerate and commit:
+```
+./gradlew test -DupdateSpec=true   # rewrites specs/openapi.yaml
+git add specs/openapi.yaml
+```
+The spec is LF-normalised (`.gitattributes`) so it diffs cleanly across OSes.
+
 ## CI / workflow
 
 - `.github/workflows/pr-checks.yml`: `./gradlew build --no-daemon` on PRs to `master`.
-- Branch → push → PR → checks pass → **squash merge** to `master`.
 - `@claude` mentions on issues/PRs trigger `.github/workflows/claude.yml`.
 
-### Merging PRs
-
-GitHub squash merge uses the **PR title** as the commit message — the individual
-branch commits are ignored. Before merging:
-
-1. Ensure the PR title is a proper commit message (e.g. `feat: add X`, `fix: correct Y`).
-   Rename it first with `gh pr edit <n> --title "..."` if needed.
-2. Merge with an explicit subject so the commit message is never left to chance:
-   ```
-   gh pr merge <n> --squash --delete-branch \
-     --subject "feat: describe the change (#<n>)" \
-     --body "Optional longer description."
-   ```
-
-Never merge a PR titled "wip", "draft", or similar.
-
-## Commit messages
-
-No attribution trailers. `attribution.commit` and `attribution.pr` are set to `""` in
-`~/.claude/settings.json` — this is enforced at the tool level.
+See root `CLAUDE.md` for the PR merge convention and commit message rules.
