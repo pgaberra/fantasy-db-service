@@ -1,6 +1,5 @@
 package com.fantasy.db.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,9 +21,8 @@ class InternalApiKeyFilterTest {
 
     @BeforeEach
     void setUp() {
-        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
-        filterWithKey = new InternalApiKeyFilter(TEST_KEY, objectMapper);
-        filterWithoutKey = new InternalApiKeyFilter("", objectMapper);
+        filterWithKey = new InternalApiKeyFilter(TEST_KEY);
+        filterWithoutKey = new InternalApiKeyFilter("");
     }
 
     @Test

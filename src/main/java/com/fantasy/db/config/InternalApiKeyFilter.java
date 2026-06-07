@@ -1,7 +1,5 @@
 package com.fantasy.db.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fantasy.db.exception.ErrorDto;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,13 +19,9 @@ public class InternalApiKeyFilter extends OncePerRequestFilter {
     static final String API_KEY_HEADER = "X-Internal-Api-Key";
 
     private final String expectedApiKey;
-    private final ObjectMapper objectMapper;
 
-    public InternalApiKeyFilter(
-            @Value("${internal.api-key:}") String expectedApiKey,
-            ObjectMapper objectMapper) {
+    public InternalApiKeyFilter(@Value("${internal.api-key:}") String expectedApiKey) {
         this.expectedApiKey = expectedApiKey;
-        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -46,10 +40,9 @@ public class InternalApiKeyFilter extends OncePerRequestFilter {
         if (!expectedApiKey.equals(providedKey)) {
             response.setStatus(HttpStatus.UNAUTHORIZED.value());
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            objectMapper.writeValue(response.getWriter(), ErrorDto.of(
-                    HttpStatus.UNAUTHORIZED.value(),
-                    HttpStatus.UNAUTHORIZED.getReasonPhrase(),
-                    "Missing or invalid " + API_KEY_HEADER + " header"));
+            response.getWriter().write(
+                    "{\"status\":401,\"error\":\"Unauthorized\",\"message\":\"Missing or invalid "
+                    + API_KEY_HEADER + " header\"}");
             return;
         }
         filterChain.doFilter(request, response);
