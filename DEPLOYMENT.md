@@ -41,6 +41,39 @@ Requests without it (or with the wrong key) receive `401 Unauthorized`. The
 When `INTERNAL_API_KEY` is **not set** (e.g. local dev), the filter is disabled and
 all requests are allowed — this makes local development easy without configuring keys.
 
+### Why a shared key and not JWT/token auth like the BFF?
+
+The BFF and this service authenticate **fundamentally different things**, so they use
+different mechanisms on purpose:
+
+- **The BFF authenticates *end users*.** Its JWT answers "who is this human and are
+  they logged in?" — it carries a user identity, has a short expiry, and is minted
+  after a password check. It's a session mechanism for people.
+- **This hop authenticates *a service*, not a person.** When the BFF calls this
+  service there often is no user at all (e.g. `register` and the existence check run
+  *before* anyone is logged in), so a user-JWT model doesn't even fit. What this
+  service needs to know is simply "is this call coming from my trusted BFF?" — a
+  machine-to-machine trust question, which the shared key answers.
+
+Duplicating the BFF's user-JWT auth here would also be the wrong layering: this
+service is a deliberately dumb persistence layer that owns no business logic and no
+concept of user sessions. Teaching it to validate user JWTs would couple it to the
+BFF's signing secret and token format, give it knowledge that belongs to the BFF,
+and *still* not cover the pre-login flows.
+
+**This is not bulletproof** — it's a perimeter check, not strong auth. A shared
+bearer secret has no per-request signing, no expiry, and manual rotation; anyone who
+obtains the key can impersonate the BFF. Stronger future hardening options, in rough
+order of effort: make this a **Render private service** (no public URL at all, key
+becomes a second layer), adopt a **service-identity token** (client-credentials
+OAuth2 or a signed service JWT, giving expiry + rotation), or **mTLS**. The shared
+key is the pragmatic first step for a two-service internal mesh.
+
+If per-user authorization is ever needed downstream (e.g. "fetch *my* roster"), the
+intended pattern is for the BFF to **forward the user identity** (an `X-User-Id`
+header or a propagated service token) *in addition to* the API key — not to move user
+authentication into this service.
+
 ## Local development
 
 ```bash
