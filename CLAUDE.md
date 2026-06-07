@@ -79,10 +79,19 @@ HTTP client. Keeping annotations accurate is a first-class requirement.
   `http://localhost:8086/swagger-ui.html` reflects the change correctly before
   opening a PR.
 
-**Current gap:** `UserController` has no `@Tag`, `@Operation`, or `@ApiResponse`
-annotations, and DTO fields (`UserResponse`, `ExistsResponse`, `CreateUserRequest`)
-have no `@Schema` annotations. These must be added before `fantasy-bff` can
-generate a typed client to replace `HttpDatabaseServiceClient`.
+### Spec snapshot (`specs/openapi.yaml`)
+
+`specs/openapi.yaml` is a committed snapshot of the live OpenAPI spec, consumed by
+`fantasy-bff` to generate its typed client. `OpenApiSpecSnapshotTest` boots the app
+and asserts the committed spec matches the running one, so **any controller/DTO
+change that isn't reflected in the spec fails the build**.
+
+After an intentional API change, regenerate and commit:
+```
+./gradlew test -DupdateSpec=true   # rewrites specs/openapi.yaml
+git add specs/openapi.yaml
+```
+The spec is LF-normalised (`.gitattributes`) so it diffs cleanly across OSes.
 
 ## CI / workflow
 
