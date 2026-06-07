@@ -22,7 +22,8 @@ other entities will come later.
 ```bash
 ./gradlew build          # compile + test (CI: ./gradlew build --no-daemon)
 ./gradlew test           # tests only (uses H2, no Postgres needed)
-./gradlew bootRun        # needs a reachable Postgres (see env below)
+docker compose up -d     # start Postgres for local dev (defined in docker-compose.yml)
+./gradlew bootRun        # run locally (requires Postgres via docker compose above)
 ```
 
 ## Architecture (`src/main/java/com/fantasy/db/`)
