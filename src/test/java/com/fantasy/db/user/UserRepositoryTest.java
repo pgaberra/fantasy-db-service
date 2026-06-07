@@ -1,0 +1,31 @@
+package com.fantasy.db.user;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@DataJpaTest
+class UserRepositoryTest {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Test
+    void findsUserByEmailCaseInsensitively() {
+        userRepository.save(User.create("Alice@Example.com", "hash"));
+
+        assertThat(userRepository.findByEmailIgnoreCase("alice@example.com")).isPresent();
+        assertThat(userRepository.findByEmailIgnoreCase("ALICE@EXAMPLE.COM")).isPresent();
+        assertThat(userRepository.findByEmailIgnoreCase("bob@example.com")).isEmpty();
+    }
+
+    @Test
+    void existsByEmailIsCaseInsensitive() {
+        userRepository.save(User.create("carol@example.com", "hash"));
+
+        assertThat(userRepository.existsByEmailIgnoreCase("CAROL@example.com")).isTrue();
+        assertThat(userRepository.existsByEmailIgnoreCase("nobody@example.com")).isFalse();
+    }
+}

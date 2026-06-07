@@ -1,0 +1,36 @@
+databases:
+  - name: fantasy-db
+    plan: free
+    databaseName: fantasy
+    user: fantasy
+
+services:
+  - type: web
+    name: fantasy-db-service
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    autoDeploy: true
+    envVars:
+      # Connection details pulled from the managed Postgres above.
+      - key: DB_HOST
+        fromDatabase:
+          name: fantasy-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: fantasy-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: fantasy-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: fantasy-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: fantasy-db
+          property: password
