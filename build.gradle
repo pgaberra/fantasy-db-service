@@ -25,6 +25,10 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
 	// Database migrations
+	// Spring Boot 4 split autoconfiguration into per-technology modules; the
+	// Flyway integration (FlywayAutoConfiguration) lives in spring-boot-flyway,
+	// which is no longer pulled in transitively by flyway-core alone.
+	implementation 'org.springframework.boot:spring-boot-flyway'
 	implementation 'org.flywaydb:flyway-core'
 	implementation 'org.flywaydb:flyway-database-postgresql'
 
