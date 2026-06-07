@@ -34,3 +34,8 @@ services:
         fromDatabase:
           name: fantasy-db
           property: password
+      # Pre-shared secret used by the BFF to authenticate service-to-service calls.
+      # Generate with: openssl rand -hex 32
+      # Set the SAME value on fantasy-bff under INTERNAL_API_KEY.
+      - key: INTERNAL_API_KEY
+        sync: false
