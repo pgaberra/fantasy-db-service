@@ -1,0 +1,15 @@
+# Profile: staging — run locally against the deployed Render Postgres.
+#   SPRING_PROFILES_ACTIVE=staging DB_PASSWORD=<render-password> ./gradlew bootRun
+# Host / database / user are not secrets and are tracked here; the password is
+# NEVER committed — provide it via the DB_PASSWORD env var.
+# Uses Render's EXTERNAL hostname (the deployed service uses the internal one),
+# so sslmode=require is needed for connections from outside Render.
+spring:
+  datasource:
+    url: jdbc:postgresql://dpg-d8ismuvlk1mc738ihopg-a.oregon-postgres.render.com:5432/fantasy_jvp9?sslmode=require
+    username: fantasy
+    password: ${DB_PASSWORD}
+  flyway:
+    # The deployed service owns the schema; never migrate shared staging from a
+    # local run. Override with SPRING_FLYWAY_ENABLED=true only if you intend to.
+    enabled: false
