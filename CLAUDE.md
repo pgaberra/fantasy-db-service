@@ -99,4 +99,37 @@ The spec is LF-normalised (`.gitattributes`) so it diffs cleanly across OSes.
 - `.github/workflows/pr-checks.yml`: `./gradlew build --no-daemon` on PRs to `master`.
 - `@claude` mentions on issues/PRs trigger `.github/workflows/claude.yml`.
 
-See root `CLAUDE.md` for the PR merge convention and commit message rules.
+## Monorepo conventions
+
+Shared across all four repos (`fantasy-web` → `fantasy-bff` → `fantasy-db-service` +
+`fantasy-nhl-service`). The web talks only to the BFF; inter-service calls to db/nhl use a
+shared `X-Internal-Api-Key` header.
+
+### Secrets
+
+**Never commit a password, API key, token, or any secret to git — in any environment**,
+not even throwaway local-dev credentials, so the habit is absolute and we never risk
+leaking (or reusing) a real one. Secrets come only from environment variables
+(`${DB_PASSWORD}`, `${INTERNAL_API_KEY}`, …) — no literal value and **no default** in
+`application*.yaml`; a missing var should fail fast, not fall back to a baked-in value.
+Non-secret connection details (host, port, db name, username) may be committed. The
+local-dev password lives only in `docker-compose.yml` (which defines the local DB). Run a
+service against a chosen DB with the `local` / `staging` Spring profiles:
+`SPRING_PROFILES_ACTIVE=<profile> DB_PASSWORD=… ./gradlew bootRun`.
+
+### Merging PRs
+
+Branch → push → PR → checks pass → **squash merge** to `master`. GitHub squash uses the
+**PR title** as the commit message, so make it a proper message (`feat: …`, `fix: …`), then
+merge with an explicit subject:
+```
+gh pr merge <n> --squash --delete-branch \
+  --subject "feat: describe the change (#<n>)" \
+  --body "Optional longer description."
+```
+Never merge a PR titled "wip"/"draft".
+
+### Commit messages
+
+No attribution trailers (`attribution.commit` / `attribution.pr` are `""` in
+`~/.claude/settings.json`, enforced at the tool level).
