@@ -63,6 +63,21 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
 - Never return raw entities with secrets to callers without thinking about
   exposure (see the auth warning above).
 
+### Logging & error handling
+
+**Never silence an error.** Every `@RestControllerAdvice` must have a catch-all
+`@ExceptionHandler(Exception.class)` that **logs the full stack trace** (`log.error`)
+and returns a consistent `ErrorDto` — an unmatched exception must never surface as an
+opaque 500 with no server-side trace (this once made a downstream failure undiagnosable
+in the BFF). Rules of thumb:
+
+- **5xx / genuine faults** (unexpected exceptions, upstream/downstream call failures):
+  log at `ERROR` with the exception so the stack trace is captured.
+- **4xx / expected client outcomes** (not-found, conflict, validation): do **not** log
+  as errors — they are normal and would just be noise.
+- **Async / background work** (e.g. jobs on a virtual thread) does **not** reach the
+  advice — it must `try/catch` and log its own failures at the job boundary.
+
 ### OpenAPI annotations
 
 This service's OpenAPI spec is consumed by `fantasy-bff` to generate a typed
