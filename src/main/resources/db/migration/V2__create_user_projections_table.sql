@@ -2,7 +2,8 @@ CREATE TABLE user_projections (
     id         UUID         PRIMARY KEY,
     user_id    UUID         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     name       VARCHAR(100) NOT NULL,
-    data       TEXT         NOT NULL,
+    season     VARCHAR(20)  NOT NULL,
+    data       JSONB        NOT NULL,
     created_at TIMESTAMPTZ  NOT NULL,
     updated_at TIMESTAMPTZ  NOT NULL,
     UNIQUE (user_id, name)

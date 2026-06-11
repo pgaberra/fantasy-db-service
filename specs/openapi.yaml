@@ -251,6 +251,103 @@ paths:
                 $ref: "#/components/schemas/ExistsResponse"
 components:
   schemas:
+    PlayerProjection:
+      type: object
+      properties:
+        playerId:
+          type: integer
+          format: int32
+        type:
+          type: string
+          enum:
+          - skater
+          - goalie
+        stats:
+          $ref: "#/components/schemas/PlayerStats"
+      required:
+      - playerId
+      - stats
+      - type
+    PlayerStats:
+      type: object
+      properties:
+        utility:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+        scoring:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+      required:
+      - scoring
+      - utility
+    ProjectionData:
+      type: object
+      properties:
+        settings:
+          $ref: "#/components/schemas/ProjectionSettings"
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlayerProjection"
+      required:
+      - players
+      - settings
+    ProjectionSettings:
+      type: object
+      properties:
+        scoringType:
+          type: string
+          enum:
+          - points
+          - category
+        statWeights:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+        activeScoringColumns:
+          type: array
+          items:
+            type: string
+        activeUtilityColumns:
+          type: array
+          items:
+            type: string
+        scaleSettings:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ScaleConfig"
+        decimalSettings:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int32
+        useDefaultDecimals:
+          type: boolean
+      required:
+      - activeScoringColumns
+      - activeUtilityColumns
+      - decimalSettings
+      - scaleSettings
+      - scoringType
+      - statWeights
+      - useDefaultDecimals
+    ScaleConfig:
+      type: object
+      properties:
+        scale:
+          type: boolean
+        scalableStats:
+          type: array
+          items:
+            type: string
+      required:
+      - scalableStats
+      - scale
     UpdateProjectionRequest:
       type: object
       properties:
@@ -259,9 +356,7 @@ components:
           maxLength: 100
           minLength: 0
         data:
-          type: string
-          maxLength: 1000000
-          minLength: 0
+          $ref: "#/components/schemas/ProjectionData"
       required:
       - data
       - name
@@ -272,8 +367,15 @@ components:
           type: string
         name:
           type: string
-        data:
+        season:
           type: string
+          enum:
+          - "20252026"
+          - "20262027"
+          - "20272028"
+          - "20282029"
+        data:
+          $ref: "#/components/schemas/ProjectionData"
         createdAt:
           type: string
           format: date-time
@@ -285,6 +387,7 @@ components:
       - data
       - id
       - name
+      - season
       - updatedAt
     CreateUserRequest:
       type: object
@@ -321,13 +424,19 @@ components:
           type: string
           maxLength: 100
           minLength: 0
-        data:
+        season:
           type: string
-          maxLength: 1000000
-          minLength: 0
+          enum:
+          - "20252026"
+          - "20262027"
+          - "20272028"
+          - "20282029"
+        data:
+          $ref: "#/components/schemas/ProjectionData"
       required:
       - data
       - name
+      - season
     ProjectionSummaryResponse:
       type: object
       properties:
@@ -335,6 +444,13 @@ components:
           type: string
         name:
           type: string
+        season:
+          type: string
+          enum:
+          - "20252026"
+          - "20262027"
+          - "20272028"
+          - "20282029"
         createdAt:
           type: string
           format: date-time
@@ -345,6 +461,7 @@ components:
       - createdAt
       - id
       - name
+      - season
       - updatedAt
     ExistsResponse:
       type: object

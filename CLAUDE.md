@@ -40,18 +40,26 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     - `POST /api/v1/users` → 201 created
   - `dto/` — `CreateUserRequest` (validated), `UserResponse`, `ExistsResponse`
 - `projection/` — feature package (saved player projections, scoped to a user):
-  - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `data` TEXT blob,
-    `created_at`, `updated_at`; unique `(user_id, name)`). The `data` is an **opaque
-    JSON blob owned by `fantasy-web`** — db-service never looks inside it.
+  - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `season`, `data`,
+    `created_at`, `updated_at`; unique `(user_id, name)`). `data` is the **modelled,
+    validated** `ProjectionData` (settings + per-player stats) stored in a **`jsonb`**
+    column (`@JdbcTypeCode(SqlTypes.JSON)`). `season` is a `Season` enum stored as its
+    8-digit code via `SeasonConverter`.
+  - `ProjectionData` — typed DTO: `settings` (`ProjectionSettings`) + `players`
+    (`List<PlayerProjection>`). Per-player stats are validated **maps** (`stat → value`)
+    keyed by the known stat vocabulary, so adding a stat needs no db-service change.
+  - `Season` / `ScoringType` / `PlayerType` — enums with `@JsonValue` codes
+    (`20262027`, `points`, `skater`).
   - `UserProjectionRepository` / `UserProjectionService` — CRUD scoped to the owning
-    user (`findByIdAndUserId` enforces ownership; duplicate name → 409).
+    user (`findByIdAndUserId` enforces ownership; the unique constraint yields 409).
   - `UserProjectionController` — `/api/v1/users/{userId}/projections` (list/get/create/
-    update/delete). List returns metadata only (no blob).
+    update/delete). List returns metadata only (no `data`).
   - `dto/` — `CreateProjectionRequest`, `UpdateProjectionRequest`, `ProjectionResponse`,
-    `ProjectionSummaryResponse`
+    `ProjectionSummaryResponse`, plus the `ProjectionData` model records.
 - `exception/` — `EmailAlreadyExistsException`, `UserNotFoundException`,
-  `ProjectionNotFoundException`, `ProjectionNameExistsException`,
-  `ErrorDto`, `GlobalExceptionHandler`
+  `ErrorDto`, `GlobalExceptionHandler`. Projections use **built-in** exceptions
+  (`NoSuchElementException` → 404, `DataIntegrityViolationException` → 409) rather than
+  custom ones.
 
 ## Database & config
 

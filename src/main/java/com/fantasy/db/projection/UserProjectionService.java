@@ -1,12 +1,11 @@
 package com.fantasy.db.projection;
 
-import com.fantasy.db.exception.ProjectionNameExistsException;
-import com.fantasy.db.exception.ProjectionNotFoundException;
-import org.springframework.dao.DataIntegrityViolationException;
+import com.fantasy.db.projection.dto.ProjectionData;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 @Service
@@ -26,32 +25,21 @@ public class UserProjectionService {
     @Transactional(readOnly = true)
     public UserProjection findById(UUID userId, UUID id) {
         return userProjectionRepository.findByIdAndUserId(id, userId)
-                .orElseThrow(() -> new ProjectionNotFoundException(id));
+                .orElseThrow(() -> new NoSuchElementException("No projection found with id: " + id));
     }
 
     @Transactional
-    public UserProjection create(UUID userId, String name, String data) {
-        if (userProjectionRepository.existsByUserIdAndName(userId, name)) {
-            throw new ProjectionNameExistsException(name);
-        }
-        try {
-            return userProjectionRepository.save(UserProjection.create(userId, name, data));
-        } catch (DataIntegrityViolationException e) {
-            // Handles the race where two requests create the same name concurrently;
-            // the unique constraint is the source of truth.
-            throw new ProjectionNameExistsException(name);
-        }
+    public UserProjection create(UUID userId, String name, Season season, ProjectionData data) {
+        // The unique (user_id, name) constraint is the source of truth for duplicates;
+        // a violation surfaces as DataIntegrityViolationException -> 409 (see GlobalExceptionHandler).
+        return userProjectionRepository.save(UserProjection.create(userId, name, season, data));
     }
 
     @Transactional
-    public UserProjection update(UUID userId, UUID id, String name, String data) {
+    public UserProjection update(UUID userId, UUID id, String name, ProjectionData data) {
         UserProjection projection = findById(userId, id);
         projection.update(name, data);
-        try {
-            return userProjectionRepository.save(projection);
-        } catch (DataIntegrityViolationException e) {
-            throw new ProjectionNameExistsException(name);
-        }
+        return userProjectionRepository.save(projection);
     }
 
     @Transactional
