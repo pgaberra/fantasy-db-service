@@ -66,7 +66,7 @@ public class UserProjectionController {
             @PathVariable UUID userId,
             @Valid @RequestBody CreateProjectionRequest request) {
         UserProjection projection =
-                userProjectionService.create(userId, request.name(), request.season(), request.data());
+                userProjectionService.create(userId, request.name(), request.data());
         return ResponseEntity.status(HttpStatus.CREATED).body(ProjectionResponse.from(projection));
     }
 

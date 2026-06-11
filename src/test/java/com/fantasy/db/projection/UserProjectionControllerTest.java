@@ -42,7 +42,6 @@ class UserProjectionControllerTest {
     private static final String VALID_BODY = """
             {
               "name": "My league",
-              "season": "20262027",
               "data": {
                 "settings": {
                   "scoringType": "points",
@@ -104,7 +103,7 @@ class UserProjectionControllerTest {
 
     @Test
     void createReturns201() throws Exception {
-        when(userProjectionService.create(eq(USER_ID), eq("My league"), any(), any()))
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), any()))
                 .thenReturn(projection("My league"));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
@@ -125,7 +124,7 @@ class UserProjectionControllerTest {
 
     @Test
     void createReturns409OnDuplicateName() throws Exception {
-        when(userProjectionService.create(eq(USER_ID), eq("My league"), any(), any()))
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), any()))
                 .thenThrow(new DataIntegrityViolationException("duplicate"));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)

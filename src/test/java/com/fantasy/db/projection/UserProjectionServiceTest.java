@@ -46,18 +46,23 @@ class UserProjectionServiceTest {
 
     @Test
     void createsAndFindsProjection() {
-        UserProjection created =
-                userProjectionService.create(userId, "My league", Season.SEASON_2026_2027, sampleData());
+        UserProjection created = userProjectionService.create(userId, "My league", sampleData());
 
         assertThat(created.getId()).isNotNull();
         assertThat(created.getCreatedAt()).isNotNull();
 
         UserProjection found = userProjectionService.findById(userId, created.getId());
         assertThat(found.getName()).isEqualTo("My league");
-        assertThat(found.getSeason()).isEqualTo(Season.SEASON_2026_2027);
         assertThat(found.getData().players()).hasSize(1);
         assertThat(found.getData().settings().scoringType()).isEqualTo(ScoringType.POINTS);
         assertThat(userProjectionService.findAll(userId)).hasSize(1);
+    }
+
+    @Test
+    void stampsTheConfiguredCurrentSeason() {
+        UserProjection created = userProjectionService.create(userId, "Seasoned", sampleData());
+
+        assertThat(created.getSeason()).isEqualTo(Season.SEASON_2026_2027);
     }
 
     @Test
@@ -72,18 +77,16 @@ class UserProjectionServiceTest {
 
     @Test
     void allowsSameNameForDifferentUsers() {
-        userProjectionService.create(userId, "Standard", Season.SEASON_2026_2027, sampleData());
+        userProjectionService.create(userId, "Standard", sampleData());
 
-        UserProjection other = userProjectionService.create(
-                UUID.randomUUID(), "Standard", Season.SEASON_2026_2027, sampleData());
+        UserProjection other = userProjectionService.create(UUID.randomUUID(), "Standard", sampleData());
 
         assertThat(other.getId()).isNotNull();
     }
 
     @Test
     void findByIdIsScopedToOwner() {
-        UserProjection mine =
-                userProjectionService.create(userId, "Mine", Season.SEASON_2026_2027, sampleData());
+        UserProjection mine = userProjectionService.create(userId, "Mine", sampleData());
 
         assertThatThrownBy(() -> userProjectionService.findById(UUID.randomUUID(), mine.getId()))
                 .isInstanceOf(NoSuchElementException.class);
@@ -91,8 +94,7 @@ class UserProjectionServiceTest {
 
     @Test
     void updatesNameAndData() {
-        UserProjection created =
-                userProjectionService.create(userId, "Old", Season.SEASON_2026_2027, sampleData());
+        UserProjection created = userProjectionService.create(userId, "Old", sampleData());
 
         ProjectionData newData = new ProjectionData(
                 sampleData().settings(),
@@ -106,8 +108,7 @@ class UserProjectionServiceTest {
 
     @Test
     void deleteRemovesProjection() {
-        UserProjection created =
-                userProjectionService.create(userId, "Temp", Season.SEASON_2026_2027, sampleData());
+        UserProjection created = userProjectionService.create(userId, "Temp", sampleData());
 
         userProjectionService.delete(userId, created.getId());
 
