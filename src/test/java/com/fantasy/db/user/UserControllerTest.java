@@ -79,6 +79,15 @@ class UserControllerTest {
     }
 
     @Test
+    void createReturns400OnOversizedPasswordHash() throws Exception {
+        String oversized = "a".repeat(101);
+        mockMvc.perform(post("/api/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"jane@example.com\",\"passwordHash\":\"" + oversized + "\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void createReturns409OnDuplicate() throws Exception {
         when(userService.create(eq("ivan@example.com"), any()))
                 .thenThrow(new EmailAlreadyExistsException("ivan@example.com"));
