@@ -10,3 +10,6 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
   flyway:
     enabled: false
+
+projections:
+  current-season: "20262027"

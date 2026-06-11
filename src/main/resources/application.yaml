@@ -21,6 +21,10 @@ spring:
 internal:
   api-key: ${INTERNAL_API_KEY:}
 
+projections:
+  # The season new projections are stamped with. Non-secret; override per environment.
+  current-season: ${CURRENT_SEASON:20262027}
+
 server:
   port: ${PORT:8086}
 

@@ -39,8 +39,28 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     - `GET /api/v1/users/exists?email=` → `{ "exists": bool }`
     - `POST /api/v1/users` → 201 created
   - `dto/` — `CreateUserRequest` (validated), `UserResponse`, `ExistsResponse`
+- `projection/` — feature package (saved player projections, scoped to a user):
+  - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `season`, `data`,
+    `created_at`, `updated_at`; unique `(user_id, name)`). `data` is the **modelled,
+    validated** `ProjectionData` (settings + per-player stats) stored in a **`jsonb`**
+    column (`@JdbcTypeCode(SqlTypes.JSON)`). `season` is stamped from the
+    `projections.current-season` config (the caller never sends it — not in
+    `CreateProjectionRequest`); stored as the 8-digit code, exposed as the `Season` enum.
+  - `ProjectionData` — typed DTO: `settings` (`ProjectionSettings`) + `players`
+    (`List<PlayerProjection>`). Per-player stats are validated **maps** (`stat → value`)
+    keyed by the known stat vocabulary, so adding a stat needs no db-service change.
+  - `Season` / `ScoringType` / `PlayerType` — enums with `@JsonValue` codes
+    (`20262027`, `points`, `skater`).
+  - `UserProjectionRepository` / `UserProjectionService` — CRUD scoped to the owning
+    user (`findByIdAndUserId` enforces ownership; the unique constraint yields 409).
+  - `UserProjectionController` — `/api/v1/users/{userId}/projections` (list/get/create/
+    update/delete). List returns metadata only (no `data`).
+  - `dto/` — `CreateProjectionRequest`, `UpdateProjectionRequest`, `ProjectionResponse`,
+    `ProjectionSummaryResponse`, plus the `ProjectionData` model records.
 - `exception/` — `EmailAlreadyExistsException`, `UserNotFoundException`,
-  `ErrorDto`, `GlobalExceptionHandler`
+  `ErrorDto`, `GlobalExceptionHandler`. Projections use **built-in** exceptions
+  (`NoSuchElementException` → 404, `DataIntegrityViolationException` → 409) rather than
+  custom ones.
 
 ## Database & config
 

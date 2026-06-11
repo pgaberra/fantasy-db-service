@@ -2,12 +2,14 @@ package com.fantasy.db.exception;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -27,6 +29,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ResponseEntity<ErrorDto> handleConflict(EmailAlreadyExistsException e) {
         return build(HttpStatus.CONFLICT, e.getMessage());
+    }
+
+    @ExceptionHandler(NoSuchElementException.class)
+    public ResponseEntity<ErrorDto> handleNoSuchElement(NoSuchElementException e) {
+        return build(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorDto> handleDataIntegrity(DataIntegrityViolationException e) {
+        return build(HttpStatus.CONFLICT, "The resource conflicts with an existing one");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
