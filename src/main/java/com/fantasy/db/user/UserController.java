@@ -3,6 +3,7 @@ package com.fantasy.db.user;
 import com.fantasy.db.exception.UserNotFoundException;
 import com.fantasy.db.user.dto.CreateUserRequest;
 import com.fantasy.db.user.dto.ExistsResponse;
+import com.fantasy.db.user.dto.GoogleUserRequest;
 import com.fantasy.db.user.dto.UserResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -60,5 +61,17 @@ public class UserController {
     public ResponseEntity<UserResponse> create(@Valid @RequestBody CreateUserRequest request) {
         User user = userService.create(request.email(), request.passwordHash());
         return ResponseEntity.status(HttpStatus.CREATED).body(UserResponse.from(user));
+    }
+
+    @Operation(summary = "Resolve the account for a verified Google identity",
+            description = "Returns the user linked to this Google subject, linking it to an "
+                    + "existing account with the same email or creating a new password-less user.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "User resolved (found, linked, or created)"),
+        @ApiResponse(responseCode = "400", description = "Validation failed (blank email / subject)")
+    })
+    @PostMapping("/google")
+    public UserResponse findOrCreateGoogleUser(@Valid @RequestBody GoogleUserRequest request) {
+        return UserResponse.from(userService.findOrCreateGoogleUser(request.email(), request.googleSub()));
     }
 }

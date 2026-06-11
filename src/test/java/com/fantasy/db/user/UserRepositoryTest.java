@@ -28,4 +28,12 @@ class UserRepositoryTest {
         assertThat(userRepository.existsByEmailIgnoreCase("CAROL@example.com")).isTrue();
         assertThat(userRepository.existsByEmailIgnoreCase("nobody@example.com")).isFalse();
     }
+
+    @Test
+    void findsUserByGoogleSub() {
+        userRepository.save(User.createWithGoogle("greg@example.com", "google-xyz"));
+
+        assertThat(userRepository.findByGoogleSub("google-xyz")).isPresent();
+        assertThat(userRepository.findByGoogleSub("no-such-sub")).isEmpty();
+    }
 }
