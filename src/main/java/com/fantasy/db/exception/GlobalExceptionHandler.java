@@ -29,6 +29,16 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, e.getMessage());
     }
 
+    @ExceptionHandler(ProjectionNotFoundException.class)
+    public ResponseEntity<ErrorDto> handleProjectionNotFound(ProjectionNotFoundException e) {
+        return build(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    @ExceptionHandler(ProjectionNameExistsException.class)
+    public ResponseEntity<ErrorDto> handleProjectionNameConflict(ProjectionNameExistsException e) {
+        return build(HttpStatus.CONFLICT, e.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorDto> handleValidation(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()

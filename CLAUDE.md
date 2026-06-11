@@ -39,7 +39,18 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     - `GET /api/v1/users/exists?email=` → `{ "exists": bool }`
     - `POST /api/v1/users` → 201 created
   - `dto/` — `CreateUserRequest` (validated), `UserResponse`, `ExistsResponse`
+- `projection/` — feature package (saved player projections, scoped to a user):
+  - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `data` TEXT blob,
+    `created_at`, `updated_at`; unique `(user_id, name)`). The `data` is an **opaque
+    JSON blob owned by `fantasy-web`** — db-service never looks inside it.
+  - `UserProjectionRepository` / `UserProjectionService` — CRUD scoped to the owning
+    user (`findByIdAndUserId` enforces ownership; duplicate name → 409).
+  - `UserProjectionController` — `/api/v1/users/{userId}/projections` (list/get/create/
+    update/delete). List returns metadata only (no blob).
+  - `dto/` — `CreateProjectionRequest`, `UpdateProjectionRequest`, `ProjectionResponse`,
+    `ProjectionSummaryResponse`
 - `exception/` — `EmailAlreadyExistsException`, `UserNotFoundException`,
+  `ProjectionNotFoundException`, `ProjectionNameExistsException`,
   `ErrorDto`, `GlobalExceptionHandler`
 
 ## Database & config
