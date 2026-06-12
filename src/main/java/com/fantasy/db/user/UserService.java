@@ -39,4 +39,32 @@ public class UserService {
             throw new EmailAlreadyExistsException(email);
         }
     }
+
+    /**
+     * Resolves the account for a verified Google identity: returns the user already
+     * linked to this Google subject, otherwise links it to an existing account with the
+     * same (verified) email, otherwise creates a new password-less Google user.
+     */
+    @Transactional
+    public User findOrCreateGoogleUser(String email, String googleSub) {
+        Optional<User> byGoogle = userRepository.findByGoogleSub(googleSub);
+        if (byGoogle.isPresent()) {
+            return byGoogle.get();
+        }
+        Optional<User> byEmail = userRepository.findByEmailIgnoreCase(email);
+        if (byEmail.isPresent()) {
+            User existing = byEmail.get();
+            existing.linkGoogle(googleSub);
+            return existing;
+        }
+        try {
+            return userRepository.save(User.createWithGoogle(email, googleSub));
+        } catch (DataIntegrityViolationException e) {
+            // A concurrent request created the same email/subject; the unique indexes are
+            // the source of truth, so re-read whichever now exists.
+            return userRepository.findByGoogleSub(googleSub)
+                    .or(() -> userRepository.findByEmailIgnoreCase(email))
+                    .orElseThrow(() -> e);
+        }
+    }
 }

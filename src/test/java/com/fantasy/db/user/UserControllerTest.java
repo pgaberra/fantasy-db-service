@@ -97,4 +97,26 @@ class UserControllerTest {
                         .content("{\"email\":\"ivan@example.com\",\"passwordHash\":\"hash\"}"))
                 .andExpect(status().isConflict());
     }
+
+    @Test
+    void googleEndpointReturnsResolvedUser() throws Exception {
+        User user = User.createWithGoogle("gabe@example.com", "google-99");
+        when(userService.findOrCreateGoogleUser(eq("gabe@example.com"), eq("google-99")))
+                .thenReturn(user);
+
+        mockMvc.perform(post("/api/v1/users/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"gabe@example.com\",\"googleSub\":\"google-99\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("gabe@example.com"))
+                .andExpect(jsonPath("$.googleSub").value("google-99"));
+    }
+
+    @Test
+    void googleEndpointReturns400OnBlankSubject() throws Exception {
+        mockMvc.perform(post("/api/v1/users/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"gabe@example.com\",\"googleSub\":\"\"}"))
+                .andExpect(status().isBadRequest());
+    }
 }

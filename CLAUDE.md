@@ -29,16 +29,21 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
 ## Architecture (`src/main/java/com/fantasy/db/`)
 
 - `user/` — feature package:
-  - `User` — JPA `@Entity` (UUID id, unique email, `password_hash`, `created_at`);
-    use static `User.create(...)`.
+  - `User` — JPA `@Entity` (UUID id, unique email, nullable `password_hash`, unique
+    nullable `google_sub`, `created_at`); `User.create(...)` for password users,
+    `User.createWithGoogle(...)` for Google users, `linkGoogle(...)` to attach Google to
+    an existing account.
   - `UserRepository` — `findByEmailIgnoreCase`, `existsByEmailIgnoreCase`
   - `UserService` — `@Transactional` create; throws `EmailAlreadyExistsException`
     (also catches `DataIntegrityViolationException` as a backstop)
   - `UserController` — `/api/v1/users`:
     - `GET /api/v1/users?email=` → user (404 if missing)
     - `GET /api/v1/users/exists?email=` → `{ "exists": bool }`
-    - `POST /api/v1/users` → 201 created
-  - `dto/` — `CreateUserRequest` (validated), `UserResponse`, `ExistsResponse`
+    - `POST /api/v1/users` → 201 created (password user)
+    - `POST /api/v1/users/google` → 200; find-or-create-or-link for a verified Google
+      identity (`{ email, googleSub }`). Resolves by `google_sub`, else links to an
+      existing same-email account, else creates a password-less user.
+  - `dto/` — `CreateUserRequest`, `GoogleUserRequest` (validated), `UserResponse`, `ExistsResponse`
 - `projection/` — feature package (saved player projections, scoped to a user):
   - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `season`, `data`,
     `created_at`, `updated_at`; unique `(user_id, name)`). `data` is the **modelled,

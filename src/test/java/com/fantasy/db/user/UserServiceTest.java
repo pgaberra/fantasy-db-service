@@ -33,4 +33,33 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.create("erin@example.com", "other"))
                 .isInstanceOf(EmailAlreadyExistsException.class);
     }
+
+    @Test
+    void createsPasswordLessGoogleUserWhenNoneExists() {
+        User user = userService.findOrCreateGoogleUser("gina@example.com", "google-1");
+
+        assertThat(user.getId()).isNotNull();
+        assertThat(user.getPasswordHash()).isNull();
+        assertThat(user.getGoogleSub()).isEqualTo("google-1");
+    }
+
+    @Test
+    void linksGoogleSubToExistingPasswordAccountWithSameEmail() {
+        User passwordUser = userService.create("link@example.com", "hashed");
+
+        User linked = userService.findOrCreateGoogleUser("link@example.com", "google-2");
+
+        assertThat(linked.getId()).isEqualTo(passwordUser.getId());
+        assertThat(linked.getGoogleSub()).isEqualTo("google-2");
+        assertThat(linked.getPasswordHash()).isEqualTo("hashed");
+    }
+
+    @Test
+    void returnsTheSameUserForARepeatedGoogleLogin() {
+        User first = userService.findOrCreateGoogleUser("repeat@example.com", "google-3");
+
+        User second = userService.findOrCreateGoogleUser("repeat@example.com", "google-3");
+
+        assertThat(second.getId()).isEqualTo(first.getId());
+    }
 }

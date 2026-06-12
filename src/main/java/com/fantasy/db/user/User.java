@@ -19,8 +19,11 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(name = "password_hash", nullable = false)
+    @Column(name = "password_hash")
     private String passwordHash;
+
+    @Column(name = "google_sub")
+    private String googleSub;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -40,6 +43,16 @@ public class User {
         return new User(UUID.randomUUID(), email, passwordHash, Instant.now());
     }
 
+    public static User createWithGoogle(String email, String googleSub) {
+        User user = new User(UUID.randomUUID(), email, null, Instant.now());
+        user.googleSub = googleSub;
+        return user;
+    }
+
+    public void linkGoogle(String googleSub) {
+        this.googleSub = googleSub;
+    }
+
     public UUID getId() {
         return id;
     }
@@ -50,6 +63,10 @@ public class User {
 
     public String getPasswordHash() {
         return passwordHash;
+    }
+
+    public String getGoogleSub() {
+        return googleSub;
     }
 
     public Instant getCreatedAt() {
