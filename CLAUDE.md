@@ -34,8 +34,9 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     `User.createWithGoogle(...)` for Google users, `linkGoogle(...)` to attach Google to
     an existing account.
   - `UserRepository` — `findByEmailIgnoreCase`, `existsByEmailIgnoreCase`
-  - `UserService` — `@Transactional` create; throws `EmailAlreadyExistsException`
-    (also catches `DataIntegrityViolationException` as a backstop)
+  - `UserService` — `@Transactional` create; a duplicate email yields a
+    `DataIntegrityViolationException` (→ 409), whether caught proactively or from the
+    unique constraint on a race
   - `UserController` — `/api/v1/users`:
     - `GET /api/v1/users?email=` → user (404 if missing)
     - `GET /api/v1/users/exists?email=` → `{ "exists": bool }`
@@ -62,10 +63,9 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     update/delete). List returns metadata only (no `data`).
   - `dto/` — `CreateProjectionRequest`, `UpdateProjectionRequest`, `ProjectionResponse`,
     `ProjectionSummaryResponse`, plus the `ProjectionData` model records.
-- `exception/` — `EmailAlreadyExistsException`, `UserNotFoundException`,
-  `ErrorDto`, `GlobalExceptionHandler`. Projections use **built-in** exceptions
-  (`NoSuchElementException` → 404, `DataIntegrityViolationException` → 409) rather than
-  custom ones.
+- `exception/` — `ErrorDto`, `GlobalExceptionHandler`. The whole service uses **built-in**
+  exceptions rather than custom ones (`NoSuchElementException` → 404,
+  `DataIntegrityViolationException` → 409, `MethodArgumentNotValidException` → 400).
 
 ## Database & config
 
