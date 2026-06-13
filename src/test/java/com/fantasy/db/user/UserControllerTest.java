@@ -1,9 +1,9 @@
 package com.fantasy.db.user;
 
-import com.fantasy.db.exception.EmailAlreadyExistsException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -90,7 +90,7 @@ class UserControllerTest {
     @Test
     void createReturns409OnDuplicate() throws Exception {
         when(userService.create(eq("ivan@example.com"), any()))
-                .thenThrow(new EmailAlreadyExistsException("ivan@example.com"));
+                .thenThrow(new DataIntegrityViolationException("duplicate email"));
 
         mockMvc.perform(post("/api/v1/users")
                         .contentType(MediaType.APPLICATION_JSON)

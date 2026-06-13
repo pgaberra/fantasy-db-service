@@ -21,16 +21,6 @@ public class GlobalExceptionHandler {
     // are intentionally not logged. Anything unexpected falls to handleUnexpected, which
     // logs the full stack trace — an unmatched exception must never be silently swallowed.
 
-    @ExceptionHandler(UserNotFoundException.class)
-    public ResponseEntity<ErrorDto> handleNotFound(UserNotFoundException e) {
-        return build(HttpStatus.NOT_FOUND, e.getMessage());
-    }
-
-    @ExceptionHandler(EmailAlreadyExistsException.class)
-    public ResponseEntity<ErrorDto> handleConflict(EmailAlreadyExistsException e) {
-        return build(HttpStatus.CONFLICT, e.getMessage());
-    }
-
     @ExceptionHandler(NoSuchElementException.class)
     public ResponseEntity<ErrorDto> handleNoSuchElement(NoSuchElementException e) {
         return build(HttpStatus.NOT_FOUND, e.getMessage());

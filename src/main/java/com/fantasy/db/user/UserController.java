@@ -1,6 +1,5 @@
 package com.fantasy.db.user;
 
-import com.fantasy.db.exception.UserNotFoundException;
 import com.fantasy.db.user.dto.CreateUserRequest;
 import com.fantasy.db.user.dto.ExistsResponse;
 import com.fantasy.db.user.dto.GoogleUserRequest;
@@ -19,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.NoSuchElementException;
 
 @Tag(name = "Users", description = "User management")
 @RestController
@@ -40,7 +41,7 @@ public class UserController {
     public UserResponse getByEmail(@RequestParam String email) {
         return userService.findByEmail(email)
                 .map(UserResponse::from)
-                .orElseThrow(() -> new UserNotFoundException(email));
+                .orElseThrow(() -> new NoSuchElementException("No user with email: " + email));
     }
 
     @Operation(summary = "Check whether a user with the given email exists")
