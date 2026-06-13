@@ -1,45 +1,56 @@
-# Deployment — fantasy-db-service (Render staging)
+# Deployment — fantasy-db-service
 
-Deployed to Render as a **Docker web service** plus a **managed PostgreSQL**
-database, both defined in [`render.yaml`](./render.yaml).
+Deployed via **Coolify** (self-hosted on Hetzner) as a **Docker service** plus a
+dedicated **PostgreSQL** database (one Coolify Postgres per service). It is an
+**internal-only** service — no public domain; the BFF reaches it over the internal
+Docker network via its stable alias `db-service:8086`.
 
 ## How it runs
 
 | Aspect | Value |
 |---|---|
 | Build | `Dockerfile` — JDK 25 builds the boot jar, JRE 25 runs it |
-| Database | Render managed PostgreSQL (`fantasy-db`, free plan) |
-| Schema | Flyway migrations run automatically on startup |
-| Port | `${PORT}` (Render injects it); 8086 locally |
+| Database | Dedicated Coolify PostgreSQL (`postgres:16-alpine`), on the same Docker network |
+| Schema | Flyway migrations run automatically on startup (`ddl-auto: validate`) |
+| Port | `${PORT}` (defaults to 8086); reached internally as `db-service:8086` |
 | Health check | `GET /actuator/health` |
-| Auto-deploy | On every push to `master` |
+| Network alias | `db-service` (Coolify `custom_network_aliases`, so the BFF URL is stable) |
 
-The `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD` env vars are wired automatically
-from the managed database via `fromDatabase` references — you don't set them by hand.
+## Environment variables (set in Coolify, per environment)
 
-`INTERNAL_API_KEY` must be set manually to the same value on both this service and
-the BFF — see the security section below.
+| Key | Value |
+|---|---|
+| `DB_HOST` | The Postgres resource's container name on the `coolify` network (its UUID alias) |
+| `DB_PORT` | `5432` |
+| `DB_USER` | `postgres` |
+| `DB_NAME` | `postgres` |
+| `DB_PASSWORD` | The password Coolify generated for that Postgres (read from the DB resource) |
+| `INTERNAL_API_KEY` | Shared secret for BFF → this service. **Same value** as the BFF's `DB_INTERNAL_API_KEY`. Generate with `openssl rand -hex 32`. |
 
-## First-time setup
+> `INTERNAL_API_KEY` and the DB password are **environment-specific** — staging and prod
+> use independent secrets, never shared.
 
-1. Push `render.yaml` to `master`.
-2. Render → **New → Blueprint** → connect `fantasy-db-service`. It creates **both**
-   the `fantasy-db` Postgres instance and the `fantasy-db-service` web service.
-3. Click **Apply**. The database provisions first, then the service builds and runs
-   Flyway migrations on startup.
-4. Generate a shared API key: `openssl rand -hex 32`
-5. Set `INTERNAL_API_KEY` in the Render dashboard for **this service** and for
-   **fantasy-bff** (both must be the same value). Redeploy both.
-6. Verify: `https://fantasy-db-service.onrender.com/actuator/health` → `{"status":"UP"}`.
+## First-time setup (per environment)
+
+1. In Coolify, create a **PostgreSQL** resource on the target server/environment. Note
+   its container/UUID (→ `DB_HOST`) and generated password (→ `DB_PASSWORD`).
+2. Create an application from this repo (GitHub App source, **Dockerfile** build pack) on
+   the same server/environment. Set `custom_network_aliases` to `db-service`.
+3. Set the env vars above (no public domain needed) and deploy. Flyway runs the
+   migrations on startup.
+4. Set the **same** `INTERNAL_API_KEY` value as the BFF's `DB_INTERNAL_API_KEY`, and the
+   BFF's `DATABASE_SERVICE_URL` to `http://db-service:8086`.
+5. Verify: `GET /actuator/health` → `{"status":"UP"}` (reachable from the BFF container or
+   the server over the Docker network).
 
 ## Service-to-service security
 
 All requests to `/api/**` must include the header `X-Internal-Api-Key: <secret>`.
 Requests without it (or with the wrong key) receive `401 Unauthorized`. The
-`/actuator/**` paths are always exempt so Render health checks work.
+`/actuator/**` paths are always exempt so health checks work.
 
-When `INTERNAL_API_KEY` is **not set** (e.g. local dev), the filter is disabled and
-all requests are allowed — this makes local development easy without configuring keys.
+When `INTERNAL_API_KEY` is **not set** (e.g. local dev) the filter is disabled and all
+requests are allowed — this makes local development easy without configuring keys.
 
 ### Why a shared key and not JWT/token auth like the BFF?
 
@@ -63,11 +74,11 @@ and *still* not cover the pre-login flows.
 
 **This is not bulletproof** — it's a perimeter check, not strong auth. A shared
 bearer secret has no per-request signing, no expiry, and manual rotation; anyone who
-obtains the key can impersonate the BFF. Stronger future hardening options, in rough
-order of effort: make this a **Render private service** (no public URL at all, key
-becomes a second layer), adopt a **service-identity token** (client-credentials
-OAuth2 or a signed service JWT, giving expiry + rotation), or **mTLS**. The shared
-key is the pragmatic first step for a two-service internal mesh.
+obtains the key can impersonate the BFF. It is mitigated by the service having **no
+public domain** (internal-network only). Stronger future hardening options, in rough
+order of effort: a **service-identity token** (client-credentials OAuth2 or a signed
+service JWT, giving expiry + rotation), or **mTLS**. The shared key is the pragmatic
+first step for a two-service internal mesh.
 
 If per-user authorization is ever needed downstream (e.g. "fetch *my* roster"), the
 intended pattern is for the BFF to **forward the user identity** (an `X-User-Id`
@@ -90,16 +101,9 @@ The service is then reachable at `http://localhost:8086`. Swagger UI:
 ## Wiring the BFF to this service
 
 The BFF reaches this service via `DATABASE_SERVICE_URL` (defaults to
-`http://localhost:8086`). Run the BFF **without** the `mock` profile so it uses the
-real HTTP client instead of the in-memory stub.
+`http://localhost:8086`; on Coolify it is `http://db-service:8086`).
 
 ```bash
 # From fantasy-bff root (local, no INTERNAL_API_KEY needed when both are local)
 SPRING_PROFILES_ACTIVE=dev JWT_SECRET=$(openssl rand -base64 48) ./gradlew bootRun
 ```
-
-## Free-tier caveats
-
-- **Free Postgres expires after ~30 days** on Render and the service sleeps when
-  idle (cold starts). Fine for staging; not for anything you care about keeping.
-- Data is **not** backed up on the free plan.
