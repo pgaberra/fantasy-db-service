@@ -5,9 +5,12 @@ exposes a small REST API for the BFF (`fantasy-bff`) to manage data. v1 scope:
 **users only** (create user, look up by email, existence check). Projections and
 other entities will come later.
 
-> ⚠️ This service is currently **unauthenticated** and returns password hashes.
-> It must not be publicly exposed without auth. Adding an API key / network
-> restriction between the BFF and this service is a known follow-up.
+> This service is **internal-only**: deployed on Coolify with no public domain, and every
+> `/api/**` request requires the shared `X-Internal-Api-Key` header (`INTERNAL_API_KEY`;
+> missing/wrong → `401`). It returns password hashes to its trusted caller (the BFF), so
+> that perimeter — no public route **plus** the API key — is what keeps them off the
+> internet. It is a perimeter check between trusted services, **not** strong per-user
+> auth; see `DEPLOYMENT.md` for the rationale and hardening options.
 
 ## Tech stack
 
@@ -86,7 +89,7 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
   + DTOs, mirroring the `user` package.
 - Keep endpoints under `/api/v1`.
 - Never return raw entities with secrets to callers without thinking about
-  exposure (see the auth warning above).
+  exposure (see the security note above).
 
 ### Logging & error handling
 
