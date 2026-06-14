@@ -52,16 +52,16 @@ Run tests (use in-memory H2 — no database needed):
 
 | Env var | Default | Notes |
 |---|---|---|
-| `PORT` | `8086` | HTTP port (Render injects this) |
+| `PORT` | `8086` | HTTP port |
 | `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` | local defaults | Postgres connection |
 
 Schema is managed by Flyway migrations in `src/main/resources/db/migration`.
 
-## ⚠️ Security note (staging)
+## Security note
 
-This service is currently deployed as a **public** Render web service with **no
-authentication**, which means its user endpoints (including password hashes) are
-internet-reachable. This is acceptable for a throwaway staging environment, but
-**before any real data** it must be locked down — e.g. a shared secret/API key
-between the BFF and this service, or a private (non-public) service. See
-`DEPLOYMENT.md`.
+This service is deployed as an **internal-only** Coolify service (no public domain) and
+its `/api/**` endpoints require a shared `X-Internal-Api-Key` header (set via
+`INTERNAL_API_KEY`); without it requests get `401`. So its user endpoints — including
+password hashes — are **not** internet-reachable: they sit behind both the missing public
+route and the API key. This is a perimeter check between trusted services, not strong
+per-user auth — see `DEPLOYMENT.md` for the rationale and hardening options.
