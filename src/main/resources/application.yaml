@@ -40,3 +40,11 @@ management:
     web:
       exposure:
         include: health,info
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: fantasy-db-service
+    version: ${APP_VERSION:dev}
