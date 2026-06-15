@@ -84,6 +84,9 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
 
 ## Conventions
 
+- **No code comments unless asked.** Don't write code comments or documentation unless
+  specifically asked to — prefer self-explanatory names. (Same AI guideline as the
+  `fantasy-web` repo.)
 - Feature-package layout (everything for an entity under one package).
 - New entities: add Flyway migration + entity + repository + service + controller
   + DTOs, mirroring the `user` package.
