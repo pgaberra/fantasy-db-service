@@ -19,5 +19,7 @@ public record ProjectionSettings(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @NotNull Map<String, Integer> decimalSettings,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean useDefaultDecimals,
         @Schema(description = "Number of teams in the league; drives the category-league ranking pool size. Only relevant for category leagues — points leagues do not use it, so it is absent for them.")
-        @Min(2) @Max(30) Integer leagueSize
+        @Min(2) @Max(30) Integer leagueSize,
+        @Schema(description = "Roster slots per team, used with leagueSize to size the category-league ranking pool (pool = teams × slots). Bench (bn) and utility (util) count as skater slots. Category leagues only — absent for points leagues.")
+        @Valid RosterSlots rosterSlots
 ) {}
