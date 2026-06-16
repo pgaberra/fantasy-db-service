@@ -21,5 +21,7 @@ public record ProjectionSettings(
         @Schema(description = "Number of teams in the league; drives the category-league ranking pool size. Only relevant for category leagues — points leagues do not use it, so it is absent for them.")
         @Min(2) @Max(30) Integer leagueSize,
         @Schema(description = "Roster slots per team, used with leagueSize to size the category-league ranking pool (pool = teams × slots). Bench (bn) and utility (util) count as skater slots. Category leagues only — absent for points leagues.")
-        @Valid RosterSlots rosterSlots
+        @Valid RosterSlots rosterSlots,
+        @Schema(description = "Minimum projected games a goalie must reach to qualify for category ranking; goalies below it are ranked last to avoid small-sample rate-stat inflation. Category leagues only — absent for points leagues.")
+        @Min(0) @Max(82) Integer minGoalieGames
 ) {}
