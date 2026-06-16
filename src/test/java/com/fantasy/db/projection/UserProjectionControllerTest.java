@@ -63,7 +63,7 @@ class UserProjectionControllerTest {
     private UserProjection projection(String name) {
         ProjectionData data = new ProjectionData(
                 new ProjectionSettings(ScoringType.POINTS, Map.of("goals", 4.5), List.of("goals"),
-                        List.of("gp"), Map.of(), Map.of("goals", 0), true, 12, null),
+                        List.of("gp"), Map.of(), Map.of("goals", 0), true, 12, null, null),
                 List.of(new PlayerProjection(1, PlayerType.SKATER,
                         new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)))));
         return new UserProjection(PROJECTION_ID, USER_ID, name, Season.SEASON_2026_2027, data,
