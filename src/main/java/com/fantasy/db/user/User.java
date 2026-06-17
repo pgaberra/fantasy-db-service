@@ -53,6 +53,10 @@ public class User {
         this.googleSub = googleSub;
     }
 
+    public void updatePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
     public UUID getId() {
         return id;
     }

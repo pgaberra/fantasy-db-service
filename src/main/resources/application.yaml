@@ -25,6 +25,11 @@ projections:
   # The season new projections are stamped with. Non-secret; override per environment.
   current-season: ${CURRENT_SEASON:20262027}
 
+security:
+  password-reset:
+    # How long an issued password reset token stays valid. Non-secret; ISO-8601 duration.
+    token-ttl: ${PASSWORD_RESET_TOKEN_TTL:PT30M}
+
 server:
   port: ${PORT:8086}
 
