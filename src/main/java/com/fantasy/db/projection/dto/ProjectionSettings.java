@@ -23,5 +23,7 @@ public record ProjectionSettings(
         @Schema(description = "Roster slots per team, used with leagueSize to size the category-league ranking pool (pool = teams × slots). Bench (bn) and utility (util) count as skater slots. Category leagues only — absent for points leagues.")
         @Valid RosterSlots rosterSlots,
         @Schema(description = "Minimum projected games a goalie must reach to qualify for category ranking; goalies below it are ranked last to avoid small-sample rate-stat inflation. Category leagues only — absent for points leagues.")
-        @Min(0) @Max(82) Integer minGoalieGames
+        @Min(0) @Max(82) Integer minGoalieGames,
+        @Schema(description = "Where these settings were last synced from — the Yahoo league name/key and the timestamp. Absent if the projection was never synced from a Yahoo league.")
+        @Valid YahooSync yahooSync
 ) {}
