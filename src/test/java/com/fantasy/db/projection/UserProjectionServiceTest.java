@@ -45,7 +45,7 @@ class UserProjectionServiceTest {
                 null);
         PlayerProjection mcDavid = new PlayerProjection(
                 1, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)));
-        return new ProjectionData(settings, List.of(mcDavid));
+        return new ProjectionData(settings, List.of(mcDavid), null);
     }
 
     @Test
@@ -103,7 +103,8 @@ class UserProjectionServiceTest {
         ProjectionData newData = new ProjectionData(
                 sampleData().settings(),
                 List.of(new PlayerProjection(
-                        2, PlayerType.GOALIE, new PlayerStats(Map.of("gp", 60.0), Map.of("w", 40.0)))));
+                        2, PlayerType.GOALIE, new PlayerStats(Map.of("gp", 60.0), Map.of("w", 40.0)))),
+                null);
         UserProjection updated = userProjectionService.update(userId, created.getId(), "New", newData);
 
         assertThat(updated.getName()).isEqualTo("New");
