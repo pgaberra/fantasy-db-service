@@ -159,6 +159,22 @@ boundary with Bean Validation (`@Valid` on the controller param + `@NotBlank` / 
 / `@Size` / … on the DTO). **Every user-supplied string gets a `@Size(max=…)`** so an
 oversized payload is rejected rather than processed or stored.
 
+### Data hygiene (pre-launch)
+
+**While the app is unreleased, fix the data — don't bend the code around it.**
+When a failure is caused by stale / legacy / malformed *persisted* data (e.g. an
+old jsonb shape that no longer deserializes), delete or correct the offending
+data — a Flyway migration or one-off cleanup — rather than adding code that
+tolerates it. Pre-launch the stored data is disposable, so a permanent code
+accommodation that degrades the model (looser validation, unknown-field
+tolerance, back-compat shims) is the wrong trade: it outlives the one-off
+problem it solved. This calculus flips at launch, when real user data can no
+longer be casually deleted and backward-compatible reads become legitimate.
+
+Example: the draft-jsonb `by`-field incident was first patched with
+`@JsonIgnoreProperties(ignoreUnknown = true)` (#43), then reverted in favour of
+a migration that deletes the legacy drafts (#46).
+
 ### Secrets
 
 **Never commit a password, API key, token, or any secret to git — in any environment**,
