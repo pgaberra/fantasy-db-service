@@ -89,6 +89,14 @@ class UserProjectionServiceTest {
     }
 
     @Test
+    void rejectsASecondProjectionForTheSameUser() {
+        userProjectionService.create(userId, "First", sampleData());
+
+        assertThatThrownBy(() -> userProjectionService.create(userId, "Second", sampleData()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void findByIdIsScopedToOwner() {
         UserProjection mine = userProjectionService.create(userId, "Mine", sampleData());
 

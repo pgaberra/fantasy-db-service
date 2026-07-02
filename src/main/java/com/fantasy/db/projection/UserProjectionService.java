@@ -2,6 +2,7 @@ package com.fantasy.db.projection;
 
 import com.fantasy.db.projection.dto.ProjectionData;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,9 +37,12 @@ public class UserProjectionService {
 
     @Transactional
     public UserProjection create(UUID userId, String name, ProjectionData data) {
-        // The season is stamped from config, not supplied by the caller. The unique
-        // (user_id, name) constraint is the source of truth for duplicates; a violation
-        // surfaces as DataIntegrityViolationException -> 409 (see GlobalExceptionHandler).
+        // Each user may keep at most one projection. Reject a second one with a conflict
+        // (DataIntegrityViolationException -> 409, see GlobalExceptionHandler). The season is
+        // stamped from config, not supplied by the caller.
+        if (userProjectionRepository.existsByUserId(userId)) {
+            throw new DataIntegrityViolationException("User already has a projection");
+        }
         return userProjectionRepository.save(UserProjection.create(userId, name, currentSeason, data));
     }
 
