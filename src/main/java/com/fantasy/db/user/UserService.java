@@ -63,4 +63,30 @@ public class UserService {
                     .orElseThrow(() -> e);
         }
     }
+
+    /**
+     * Resolves the account for a verified Facebook identity: returns the user already
+     * linked to this Facebook subject, otherwise links it to an existing account with the
+     * same (verified) email, otherwise creates a new password-less Facebook user.
+     */
+    @Transactional
+    public User findOrCreateFacebookUser(String email, String facebookSub) {
+        Optional<User> byFacebook = userRepository.findByFacebookSub(facebookSub);
+        if (byFacebook.isPresent()) {
+            return byFacebook.get();
+        }
+        Optional<User> byEmail = userRepository.findByEmailIgnoreCase(email);
+        if (byEmail.isPresent()) {
+            User existing = byEmail.get();
+            existing.linkFacebook(facebookSub);
+            return existing;
+        }
+        try {
+            return userRepository.save(User.createWithFacebook(email, facebookSub));
+        } catch (DataIntegrityViolationException e) {
+            return userRepository.findByFacebookSub(facebookSub)
+                    .or(() -> userRepository.findByEmailIgnoreCase(email))
+                    .orElseThrow(() -> e);
+        }
+    }
 }

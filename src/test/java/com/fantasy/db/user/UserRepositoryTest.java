@@ -36,4 +36,12 @@ class UserRepositoryTest {
         assertThat(userRepository.findByGoogleSub("google-xyz")).isPresent();
         assertThat(userRepository.findByGoogleSub("no-such-sub")).isEmpty();
     }
+
+    @Test
+    void findsUserByFacebookSub() {
+        userRepository.save(User.createWithFacebook("faye@example.com", "facebook-xyz"));
+
+        assertThat(userRepository.findByFacebookSub("facebook-xyz")).isPresent();
+        assertThat(userRepository.findByFacebookSub("no-such-sub")).isEmpty();
+    }
 }

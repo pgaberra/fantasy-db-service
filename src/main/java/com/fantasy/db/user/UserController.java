@@ -2,6 +2,7 @@ package com.fantasy.db.user;
 
 import com.fantasy.db.user.dto.CreateUserRequest;
 import com.fantasy.db.user.dto.ExistsResponse;
+import com.fantasy.db.user.dto.FacebookUserRequest;
 import com.fantasy.db.user.dto.GoogleUserRequest;
 import com.fantasy.db.user.dto.UserResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -74,5 +75,18 @@ public class UserController {
     @PostMapping("/google")
     public UserResponse findOrCreateGoogleUser(@Valid @RequestBody GoogleUserRequest request) {
         return UserResponse.from(userService.findOrCreateGoogleUser(request.email(), request.googleSub()));
+    }
+
+    @Operation(summary = "Resolve the account for a verified Facebook identity",
+            description = "Returns the user linked to this Facebook subject, linking it to an "
+                    + "existing account with the same email or creating a new password-less user.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "User resolved (found, linked, or created)"),
+        @ApiResponse(responseCode = "400", description = "Validation failed (blank email / subject)")
+    })
+    @PostMapping("/facebook")
+    public UserResponse findOrCreateFacebookUser(@Valid @RequestBody FacebookUserRequest request) {
+        return UserResponse.from(
+                userService.findOrCreateFacebookUser(request.email(), request.facebookSub()));
     }
 }

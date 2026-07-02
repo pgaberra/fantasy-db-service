@@ -62,4 +62,33 @@ class UserServiceTest {
 
         assertThat(second.getId()).isEqualTo(first.getId());
     }
+
+    @Test
+    void createsPasswordLessFacebookUserWhenNoneExists() {
+        User user = userService.findOrCreateFacebookUser("fern@example.com", "facebook-1");
+
+        assertThat(user.getId()).isNotNull();
+        assertThat(user.getPasswordHash()).isNull();
+        assertThat(user.getFacebookSub()).isEqualTo("facebook-1");
+    }
+
+    @Test
+    void linksFacebookSubToExistingPasswordAccountWithSameEmail() {
+        User passwordUser = userService.create("fblink@example.com", "hashed");
+
+        User linked = userService.findOrCreateFacebookUser("fblink@example.com", "facebook-2");
+
+        assertThat(linked.getId()).isEqualTo(passwordUser.getId());
+        assertThat(linked.getFacebookSub()).isEqualTo("facebook-2");
+        assertThat(linked.getPasswordHash()).isEqualTo("hashed");
+    }
+
+    @Test
+    void returnsTheSameUserForARepeatedFacebookLogin() {
+        User first = userService.findOrCreateFacebookUser("fbrepeat@example.com", "facebook-3");
+
+        User second = userService.findOrCreateFacebookUser("fbrepeat@example.com", "facebook-3");
+
+        assertThat(second.getId()).isEqualTo(first.getId());
+    }
 }

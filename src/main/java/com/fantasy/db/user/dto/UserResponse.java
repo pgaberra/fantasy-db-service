@@ -6,11 +6,16 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record UserResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String id,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String email,
-        @Schema(description = "Null for users who only authenticate via Google") String passwordHash,
-        @Schema(description = "Google subject id; null for password-only users") String googleSub
+        @Schema(description = "Null for users who only authenticate via a social provider") String passwordHash,
+        @Schema(description = "Google subject id; null otherwise") String googleSub,
+        @Schema(description = "Facebook subject id; null otherwise") String facebookSub
 ) {
     public static UserResponse from(User user) {
         return new UserResponse(
-                user.getId().toString(), user.getEmail(), user.getPasswordHash(), user.getGoogleSub());
+                user.getId().toString(),
+                user.getEmail(),
+                user.getPasswordHash(),
+                user.getGoogleSub(),
+                user.getFacebookSub());
     }
 }
