@@ -119,4 +119,26 @@ class UserControllerTest {
                         .content("{\"email\":\"gabe@example.com\",\"googleSub\":\"\"}"))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void facebookEndpointReturnsResolvedUser() throws Exception {
+        User user = User.createWithFacebook("faye@example.com", "facebook-99");
+        when(userService.findOrCreateFacebookUser(eq("faye@example.com"), eq("facebook-99")))
+                .thenReturn(user);
+
+        mockMvc.perform(post("/api/v1/users/facebook")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"faye@example.com\",\"facebookSub\":\"facebook-99\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("faye@example.com"))
+                .andExpect(jsonPath("$.facebookSub").value("facebook-99"));
+    }
+
+    @Test
+    void facebookEndpointReturns400OnBlankSubject() throws Exception {
+        mockMvc.perform(post("/api/v1/users/facebook")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"faye@example.com\",\"facebookSub\":\"\"}"))
+                .andExpect(status().isBadRequest());
+    }
 }

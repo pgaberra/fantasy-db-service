@@ -25,6 +25,9 @@ public class User {
     @Column(name = "google_sub")
     private String googleSub;
 
+    @Column(name = "facebook_sub")
+    private String facebookSub;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -49,8 +52,18 @@ public class User {
         return user;
     }
 
+    public static User createWithFacebook(String email, String facebookSub) {
+        User user = new User(UUID.randomUUID(), email, null, Instant.now());
+        user.facebookSub = facebookSub;
+        return user;
+    }
+
     public void linkGoogle(String googleSub) {
         this.googleSub = googleSub;
+    }
+
+    public void linkFacebook(String facebookSub) {
+        this.facebookSub = facebookSub;
     }
 
     public void updatePassword(String passwordHash) {
@@ -71,6 +84,10 @@ public class User {
 
     public String getGoogleSub() {
         return googleSub;
+    }
+
+    public String getFacebookSub() {
+        return facebookSub;
     }
 
     public Instant getCreatedAt() {
