@@ -67,6 +67,7 @@ public class PasswordResetService {
         User user = userRepository.findById(token.getUserId())
                 .orElseThrow(() -> new NoSuchElementException("Account not found for token"));
         user.updatePassword(newPasswordHash);
+        user.bumpTokenVersion();
         token.markUsed(Instant.now());
     }
 
