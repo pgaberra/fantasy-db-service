@@ -31,6 +31,11 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    // Bumped whenever every existing session for this user must be invalidated (e.g. a password
+    // reset). The BFF stamps it into the refresh token and rejects a refresh whose value is stale.
+    @Column(name = "token_version", nullable = false)
+    private int tokenVersion;
+
     protected User() {
         // Required by JPA
     }
@@ -70,6 +75,11 @@ public class User {
         this.passwordHash = passwordHash;
     }
 
+    /** Invalidate every existing session for this user (the BFF rejects refresh tokens issued before). */
+    public void bumpTokenVersion() {
+        this.tokenVersion++;
+    }
+
     public UUID getId() {
         return id;
     }
@@ -92,5 +102,9 @@ public class User {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public int getTokenVersion() {
+        return tokenVersion;
     }
 }

@@ -72,8 +72,10 @@ class PasswordResetServiceTest {
 
         passwordResetService.resetPassword(token, "new-hash");
 
-        assertThat(userRepository.findByEmailIgnoreCase("reset@example.com").orElseThrow().getPasswordHash())
-                .isEqualTo("new-hash");
+        User updated = userRepository.findByEmailIgnoreCase("reset@example.com").orElseThrow();
+        assertThat(updated.getPasswordHash()).isEqualTo("new-hash");
+        // A reset invalidates existing sessions: the token version is bumped (0 -> 1).
+        assertThat(updated.getTokenVersion()).isEqualTo(1);
         assertThatThrownBy(() -> passwordResetService.resetPassword(token, "another-hash"))
                 .isInstanceOf(NoSuchElementException.class);
     }
