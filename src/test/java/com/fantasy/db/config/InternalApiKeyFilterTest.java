@@ -3,11 +3,13 @@ package com.fantasy.db.config;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import static com.fantasy.db.config.InternalApiKeyFilter.API_KEY_HEADER;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -16,41 +18,64 @@ class InternalApiKeyFilterTest {
 
     private static final String TEST_KEY = "secret-key";
 
-    private InternalApiKeyFilter filterWithKey;
-    private InternalApiKeyFilter filterWithoutKey;
+    private InternalApiKeyFilter filter;
 
     @BeforeEach
     void setUp() {
-        filterWithKey = new InternalApiKeyFilter(TEST_KEY);
-        filterWithoutKey = new InternalApiKeyFilter("");
+        filter = new InternalApiKeyFilter(TEST_KEY);
     }
 
     @Test
-    void shouldNotFilter_whenApiKeyNotConfigured() {
-        assertThat(filterWithoutKey.shouldNotFilter(new MockHttpServletRequest())).isTrue();
+    void failsFast_whenKeyBlank() {
+        InternalApiKeyFilter keyless = new InternalApiKeyFilter("");
+        assertThatThrownBy(keyless::requireApiKey).isInstanceOf(IllegalStateException.class);
     }
 
     @Test
-    void shouldNotFilter_forActuatorPaths() {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRequestURI("/actuator/health");
-        assertThat(filterWithKey.shouldNotFilter(request)).isTrue();
+    void contextFailsToStart_whenKeyMissing() {
+        new ApplicationContextRunner()
+                .withBean(InternalApiKeyFilter.class, () -> new InternalApiKeyFilter(""))
+                .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void shouldNotFilter_forActuatorHealthAndInfo() {
+        assertThat(filter.shouldNotFilter(requestTo("/actuator/health"))).isTrue();
+        assertThat(filter.shouldNotFilter(requestTo("/actuator/health/liveness"))).isTrue();
+        assertThat(filter.shouldNotFilter(requestTo("/actuator/info"))).isTrue();
     }
 
     @Test
     void shouldFilter_forApiPaths() {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRequestURI("/api/v1/users");
-        assertThat(filterWithKey.shouldNotFilter(request)).isFalse();
+        assertThat(filter.shouldNotFilter(requestTo("/api/v1/users"))).isFalse();
+    }
+
+    @Test
+    void shouldFilter_forActuatorTraversalIntoApi() {
+        assertThat(filter.shouldNotFilter(requestTo("/actuator/health/../../api/v1/users"))).isFalse();
+        assertThat(filter.shouldNotFilter(requestTo("/actuator/health/%2e%2e/%2e%2e/api/v1/users")))
+                .isFalse();
+        // matrix-parameter traversal that cleanPath alone doesn't collapse
+        assertThat(filter.shouldNotFilter(requestTo("/actuator/health/..;/..;/api/v1/users"))).isFalse();
+    }
+
+    @Test
+    void rejects_malformedEncodedUri_withoutThrowing() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filter.doFilter(requestTo("/api/v1/users%2"), response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        verifyNoInteractions(chain);
     }
 
     @Test
     void rejects_requestWithoutHeader() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest();
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 
-        filterWithKey.doFilter(request, response, chain);
+        filter.doFilter(requestTo("/api/v1/users"), response, chain);
 
         assertThat(response.getStatus()).isEqualTo(401);
         verifyNoInteractions(chain);
@@ -58,12 +83,12 @@ class InternalApiKeyFilterTest {
 
     @Test
     void rejects_requestWithWrongKey() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletRequest request = requestTo("/api/v1/users");
         request.addHeader(API_KEY_HEADER, "wrong-key");
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 
-        filterWithKey.doFilter(request, response, chain);
+        filter.doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(401);
         verifyNoInteractions(chain);
@@ -71,14 +96,20 @@ class InternalApiKeyFilterTest {
 
     @Test
     void allows_requestWithCorrectKey() throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletRequest request = requestTo("/api/v1/users");
         request.addHeader(API_KEY_HEADER, TEST_KEY);
         MockHttpServletResponse response = new MockHttpServletResponse();
         FilterChain chain = mock(FilterChain.class);
 
-        filterWithKey.doFilter(request, response, chain);
+        filter.doFilter(request, response, chain);
 
         assertThat(response.getStatus()).isEqualTo(200);
         verify(chain).doFilter(request, response);
+    }
+
+    private static MockHttpServletRequest requestTo(String uri) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI(uri);
+        return request;
     }
 }

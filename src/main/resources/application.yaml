@@ -19,6 +19,9 @@ spring:
     enabled: true
 
 internal:
+  # Required in every environment: the app refuses to start if this is blank, so it never serves
+  # an unauthenticated internal API (this service returns password hashes). Set INTERNAL_API_KEY
+  # when running locally too; tests supply their own key.
   api-key: ${INTERNAL_API_KEY:}
 
 projections:

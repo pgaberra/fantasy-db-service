@@ -13,3 +13,9 @@ spring:
 
 projections:
   current-season: "20262027"
+
+# Non-secret dummy key so the context boots (the filter requires a key). Slice tests that
+# don't care about auth use @AutoConfigureMockMvc(addFilters = false); full-context tests that
+# call a protected endpoint send this value in the X-Internal-Api-Key header.
+internal:
+  api-key: test-internal-key

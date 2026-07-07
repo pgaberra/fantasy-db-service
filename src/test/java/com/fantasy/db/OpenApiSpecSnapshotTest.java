@@ -1,6 +1,7 @@
 package com.fantasy.db;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
@@ -30,6 +31,9 @@ class OpenApiSpecSnapshotTest {
     @LocalServerPort
     private int port;
 
+    @Value("${internal.api-key}")
+    private String internalApiKey;
+
     private static final Path SPEC = Path.of("specs", "openapi.yaml");
 
     @Test
@@ -54,7 +58,9 @@ class OpenApiSpecSnapshotTest {
 
     private String fetchSpec() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v3/api-docs.yaml")).GET().build(),
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v3/api-docs.yaml"))
+                        .header("X-Internal-Api-Key", internalApiKey)
+                        .GET().build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
         return response.body();
