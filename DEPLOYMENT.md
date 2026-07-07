@@ -46,11 +46,13 @@ Docker network via its stable alias `db-service:8086`.
 ## Service-to-service security
 
 All requests to `/api/**` must include the header `X-Internal-Api-Key: <secret>`.
-Requests without it (or with the wrong key) receive `401 Unauthorized`. The
-`/actuator/**` paths are always exempt so health checks work.
+Requests without it (or with the wrong key) receive `401 Unauthorized`. Only the
+`/actuator/health` and `/actuator/info` probes are exempt so health checks work.
 
-When `INTERNAL_API_KEY` is **not set** (e.g. local dev) the filter is disabled and all
-requests are allowed — this makes local development easy without configuring keys.
+`INTERNAL_API_KEY` is **required in every environment**: the service **refuses to start**
+if it is blank (fail closed) rather than serving an unauthenticated API — this service
+returns password hashes. Set it when running locally too (like `DB_PASSWORD`); tests supply
+their own key.
 
 ### Why a shared key and not JWT/token auth like the BFF?
 
