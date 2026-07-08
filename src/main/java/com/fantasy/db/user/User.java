@@ -36,6 +36,11 @@ public class User {
     @Column(name = "token_version", nullable = false)
     private int tokenVersion;
 
+    // Whether the account's email address has been proven. Social sign-ups are verified by the
+    // provider; a password sign-up starts unverified until it consumes an email-verification token.
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
     protected User() {
         // Required by JPA
     }
@@ -54,21 +59,26 @@ public class User {
     public static User createWithGoogle(String email, String googleSub) {
         User user = new User(UUID.randomUUID(), email, null, Instant.now());
         user.googleSub = googleSub;
+        user.emailVerified = true;
         return user;
     }
 
     public static User createWithFacebook(String email, String facebookSub) {
         User user = new User(UUID.randomUUID(), email, null, Instant.now());
         user.facebookSub = facebookSub;
+        user.emailVerified = true;
         return user;
     }
 
     public void linkGoogle(String googleSub) {
         this.googleSub = googleSub;
+        // The provider has proven ownership of this email, so linking it verifies the account.
+        this.emailVerified = true;
     }
 
     public void linkFacebook(String facebookSub) {
         this.facebookSub = facebookSub;
+        this.emailVerified = true;
     }
 
     public void updatePassword(String passwordHash) {
@@ -78,6 +88,11 @@ public class User {
     /** Invalidate every existing session for this user (the BFF rejects refresh tokens issued before). */
     public void bumpTokenVersion() {
         this.tokenVersion++;
+    }
+
+    /** Marks the account's email as proven (a verification token was consumed). */
+    public void markEmailVerified() {
+        this.emailVerified = true;
     }
 
     public UUID getId() {
@@ -106,5 +121,9 @@ public class User {
 
     public int getTokenVersion() {
         return tokenVersion;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
     }
 }

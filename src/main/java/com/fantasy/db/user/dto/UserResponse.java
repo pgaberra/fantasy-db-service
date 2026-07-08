@@ -11,7 +11,9 @@ public record UserResponse(
         @Schema(description = "Facebook subject id; null otherwise") String facebookSub,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
                 description = "Session-invalidation counter; the BFF stamps it into refresh tokens "
-                        + "and rejects a refresh whose value is stale") int tokenVersion
+                        + "and rejects a refresh whose value is stale") int tokenVersion,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Whether the account's email address has been verified") boolean emailVerified
 ) {
     public static UserResponse from(User user) {
         return new UserResponse(
@@ -20,6 +22,7 @@ public record UserResponse(
                 user.getPasswordHash(),
                 user.getGoogleSub(),
                 user.getFacebookSub(),
-                user.getTokenVersion());
+                user.getTokenVersion(),
+                user.isEmailVerified());
     }
 }
