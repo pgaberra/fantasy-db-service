@@ -1,5 +1,8 @@
 package com.fantasy.db.projection;
 
+import com.fantasy.db.projection.dto.DraftPick;
+import com.fantasy.db.projection.dto.DraftState;
+import com.fantasy.db.projection.dto.DraftTeam;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.ProjectionData;
@@ -63,14 +66,26 @@ class UserProjectionControllerTest {
             """;
 
     private UserProjection projection(String name) {
+        return projection(name, null);
+    }
+
+    private UserProjection projection(String name, DraftState draft) {
         ProjectionData data = new ProjectionData(
                 new ProjectionSettings(ScoringType.POINTS, Map.of("goals", 4.5), List.of("goals"),
                         List.of("gp"), Map.of(), Map.of("goals", 0), true, 12, null, null, null),
                 List.of(new PlayerProjection(1, PlayerType.SKATER,
                         new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)))),
-                null);
+                draft);
         return new UserProjection(PROJECTION_ID, USER_ID, name, Season.SEASON_2026_2027, data,
                 Instant.now(), Instant.now());
+    }
+
+    private static DraftState draft(Instant finishedAt) {
+        return new DraftState(
+                List.of(new DraftTeam("t1", "Me", true)),
+                List.of("t1"),
+                List.of(new DraftPick(1, "t1")),
+                finishedAt);
     }
 
     @Test
@@ -81,7 +96,20 @@ class UserProjectionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].name").value("My league"))
                 .andExpect(jsonPath("$[0].season").value("20262027"))
-                .andExpect(jsonPath("$[0].id").value(PROJECTION_ID.toString()));
+                .andExpect(jsonPath("$[0].id").value(PROJECTION_ID.toString()))
+                .andExpect(jsonPath("$[0].draftStatus").value("none"));
+    }
+
+    @Test
+    void listReflectsDraftStatus() throws Exception {
+        when(userProjectionService.findAll(USER_ID)).thenReturn(List.of(
+                projection("Finished", draft(Instant.parse("2026-07-15T10:00:00Z"))),
+                projection("In progress", draft(null))));
+
+        mockMvc.perform(get("/api/v1/users/{userId}/projections", USER_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].draftStatus").value("finished"))
+                .andExpect(jsonPath("$[1].draftStatus").value("in_progress"));
     }
 
     @Test
