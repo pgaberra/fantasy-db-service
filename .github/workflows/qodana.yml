@@ -27,7 +27,7 @@ jobs:
       # are false positives (e.g. Boolean.TRUE.equals on a value that can be null at
       # runtime) that must not block.
       - name: Qodana Scan
-        uses: JetBrains/qodana-action@v2026.1
+        uses: JetBrains/qodana-action@v2026.2
         continue-on-error: true
         with:
           pr-mode: false
