@@ -4,6 +4,7 @@ import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
+import com.fantasy.db.projection.dto.UpdateProjectionData;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -108,7 +109,7 @@ class UserProjectionServiceTest {
     void updatesNameAndData() {
         UserProjection created = userProjectionService.create(userId, "Old", sampleData());
 
-        ProjectionData newData = new ProjectionData(
+        UpdateProjectionData newData = new UpdateProjectionData(
                 sampleData().settings(),
                 List.of(new PlayerProjection(
                         2, PlayerType.GOALIE, new PlayerStats(Map.of("gp", 60.0), Map.of("w", 40.0)))),
@@ -117,6 +118,32 @@ class UserProjectionServiceTest {
 
         assertThat(updated.getName()).isEqualTo("New");
         assertThat(updated.getData().players().getFirst().type()).isEqualTo(PlayerType.GOALIE);
+    }
+
+    /**
+     * The point of the partial update: the ~0.5 MB of player rows do not have to be re-sent by an
+     * autosave that only moved a stat weight.
+     */
+    @Test
+    void omittedPlayersKeepTheStoredRows() {
+        UserProjection created = userProjectionService.create(userId, "Old", sampleData());
+        ProjectionSettings changedSettings = sampleData().settings();
+
+        UserProjection updated = userProjectionService.update(userId, created.getId(), "New",
+                new UpdateProjectionData(changedSettings, null, null));
+
+        assertThat(updated.getName()).isEqualTo("New");
+        assertThat(updated.getData().players()).isEqualTo(sampleData().players());
+    }
+
+    @Test
+    void emptyPlayersClearsThemRatherThanBeingTreatedAsOmitted() {
+        UserProjection created = userProjectionService.create(userId, "Old", sampleData());
+
+        UserProjection updated = userProjectionService.update(userId, created.getId(), "New",
+                new UpdateProjectionData(sampleData().settings(), List.of(), null));
+
+        assertThat(updated.getData().players()).isEmpty();
     }
 
     @Test
