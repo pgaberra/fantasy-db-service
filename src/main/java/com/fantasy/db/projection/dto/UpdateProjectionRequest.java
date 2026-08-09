@@ -8,5 +8,5 @@ import jakarta.validation.constraints.Size;
 
 public record UpdateProjectionRequest(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @NotBlank @Size(max = 100) String name,
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @NotNull @Valid ProjectionData data
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @NotNull @Valid UpdateProjectionData data
 ) {}

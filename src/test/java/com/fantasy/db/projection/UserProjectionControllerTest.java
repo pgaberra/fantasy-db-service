@@ -7,7 +7,9 @@ import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
+import com.fantasy.db.projection.dto.UpdateProjectionData;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -22,12 +24,15 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -61,6 +66,23 @@ class UserProjectionControllerTest {
                   { "playerId": 1, "type": "skater",
                     "stats": { "utility": { "gp": 82 }, "scoring": { "goals": 64 } } }
                 ]
+              }
+            }
+            """;
+
+    private static final String BODY_WITHOUT_PLAYERS = """
+            {
+              "name": "My league",
+              "data": {
+                "settings": {
+                  "scoringType": "points",
+                  "statWeights": { "goals": 4.5 },
+                  "activeScoringColumns": ["goals"],
+                  "activeUtilityColumns": ["gp"],
+                  "scaleSettings": {},
+                  "decimalSettings": { "goals": 0 },
+                  "useDefaultDecimals": true
+                }
               }
             }
             """;
@@ -162,6 +184,40 @@ class UserProjectionControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
                 .andExpect(status().isConflict());
+    }
+
+    /**
+     * An autosave that only moved a stat weight sends settings alone — about a kilobyte instead of
+     * the ~0.5 MB of player rows it did not touch.
+     */
+    @Test
+    void updateAcceptsABodyWithoutPlayers() throws Exception {
+        ArgumentCaptor<UpdateProjectionData> sent = ArgumentCaptor.forClass(UpdateProjectionData.class);
+        when(userProjectionService.update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), any()))
+                .thenReturn(projection("My league"));
+
+        mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY_WITHOUT_PLAYERS))
+                .andExpect(status().isOk());
+
+        verify(userProjectionService).update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), sent.capture());
+        assertThat(sent.getValue().players()).isNull();
+    }
+
+    @Test
+    void updateStillAcceptsABodyWithPlayers() throws Exception {
+        ArgumentCaptor<UpdateProjectionData> sent = ArgumentCaptor.forClass(UpdateProjectionData.class);
+        when(userProjectionService.update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), any()))
+                .thenReturn(projection("My league"));
+
+        mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isOk());
+
+        verify(userProjectionService).update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), sent.capture());
+        assertThat(sent.getValue().players()).hasSize(1);
     }
 
     @Test
