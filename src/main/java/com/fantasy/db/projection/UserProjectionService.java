@@ -1,6 +1,8 @@
 package com.fantasy.db.projection;
 
+import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.ProjectionData;
+import com.fantasy.db.projection.dto.UpdateProjectionData;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -46,10 +48,19 @@ public class UserProjectionService {
         return userProjectionRepository.save(UserProjection.create(userId, name, currentSeason, data));
     }
 
+    /**
+     * Applies an update. The player rows are the one part a caller may omit — they are ~0.5 MB
+     * and unchanged by most edits — in which case the stored ones are carried over. Merging here
+     * rather than in the caller keeps the read and the write inside one transaction, so two
+     * concurrent updates cannot interleave into a projection that is half old and half new.
+     */
     @Transactional
-    public UserProjection update(UUID userId, UUID id, String name, ProjectionData data) {
+    public UserProjection update(UUID userId, UUID id, String name, UpdateProjectionData incoming) {
         UserProjection projection = findById(userId, id);
-        projection.update(name, data);
+        List<PlayerProjection> players = incoming.players() != null
+                ? incoming.players()
+                : projection.getData().players();
+        projection.update(name, new ProjectionData(incoming.settings(), players, incoming.draft()));
         return userProjectionRepository.save(projection);
     }
 
