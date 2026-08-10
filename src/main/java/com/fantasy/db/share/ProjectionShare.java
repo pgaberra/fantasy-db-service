@@ -58,9 +58,6 @@ public class ProjectionShare {
     @Column(nullable = false)
     private SharedProjectionData data;
 
-    @Column(name = "view_count", nullable = false)
-    private long viewCount;
-
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -72,7 +69,7 @@ public class ProjectionShare {
     }
 
     public ProjectionShare(UUID id, UUID projectionId, UUID userId, String token, String authorAlias,
-                           String name, Season season, SharedProjectionData data, long viewCount,
+                           String name, Season season, SharedProjectionData data,
                            Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.projectionId = projectionId;
@@ -82,7 +79,6 @@ public class ProjectionShare {
         this.name = name;
         this.season = season.getCode();
         this.data = data;
-        this.viewCount = viewCount;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -91,7 +87,7 @@ public class ProjectionShare {
                                          Season season, SharedProjectionData data) {
         Instant now = Instant.now();
         return new ProjectionShare(UUID.randomUUID(), projectionId, userId, generateToken(), authorAlias,
-                name, season, data, 0L, now, now);
+                name, season, data, now, now);
     }
 
     public void refresh(String authorAlias, String name, SharedProjectionData data) {
@@ -137,10 +133,6 @@ public class ProjectionShare {
 
     public SharedProjectionData getData() {
         return data;
-    }
-
-    public long getViewCount() {
-        return viewCount;
     }
 
     public Instant getCreatedAt() {
