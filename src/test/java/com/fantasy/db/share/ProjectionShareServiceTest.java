@@ -1,6 +1,7 @@
 package com.fantasy.db.share;
 
 import com.fantasy.db.projection.PlayerType;
+import com.fantasy.db.projection.ProjectionKind;
 import com.fantasy.db.projection.ScoringType;
 import com.fantasy.db.projection.Season;
 import com.fantasy.db.projection.UserProjection;
@@ -75,7 +76,7 @@ class ProjectionShareServiceTest {
     }
 
     private UserProjection projection() {
-        return userProjectionService.create(userId, "My league", projectionData());
+        return userProjectionService.create(userId, "My league", ProjectionKind.PROJECTION, projectionData());
     }
 
     @Test
