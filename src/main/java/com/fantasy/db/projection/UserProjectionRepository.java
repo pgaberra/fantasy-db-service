@@ -12,7 +12,5 @@ public interface UserProjectionRepository extends JpaRepository<UserProjection, 
 
     Optional<UserProjection> findByIdAndUserId(UUID id, UUID userId);
 
-    boolean existsByUserIdAndName(UUID userId, String name);
-
     boolean existsByUserIdAndKind(UUID userId, ProjectionKind kind);
 }
