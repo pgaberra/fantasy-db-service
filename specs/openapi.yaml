@@ -295,7 +295,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProjectionResponse"
         "409":
-          description: The user already has a projection with that name
+          description: "The user already has a projection of that kind, or one with\
+            \ that name"
           content:
             '*/*':
               schema:
@@ -861,6 +862,11 @@ components:
           type: string
         name:
           type: string
+        kind:
+          type: string
+          enum:
+          - projection
+          - preset_draft
         season:
           type: string
           enum:
@@ -880,6 +886,7 @@ components:
       - createdAt
       - data
       - id
+      - kind
       - name
       - season
       - updatedAt
@@ -934,6 +941,12 @@ components:
           type: string
           maxLength: 100
           minLength: 0
+        kind:
+          type: string
+          description: What the projection is for. Defaults to the user's own.
+          enum:
+          - projection
+          - preset_draft
         data:
           $ref: "#/components/schemas/ProjectionData"
       required:
@@ -1041,6 +1054,11 @@ components:
           type: string
         name:
           type: string
+        kind:
+          type: string
+          enum:
+          - projection
+          - preset_draft
         season:
           type: string
           enum:
@@ -1064,6 +1082,7 @@ components:
       - createdAt
       - draftStatus
       - id
+      - kind
       - name
       - season
       - updatedAt

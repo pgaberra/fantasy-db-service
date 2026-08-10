@@ -38,14 +38,17 @@ public class UserProjectionService {
     }
 
     @Transactional
-    public UserProjection create(UUID userId, String name, ProjectionData data) {
-        // Each user may keep at most one projection. Reject a second one with a conflict
+    public UserProjection create(UUID userId, String name, ProjectionKind kind, ProjectionData data) {
+        // Each user may keep at most one projection of each kind: one they made themselves, and
+        // one holding a draft started from a preset. Reject a second one with a conflict
         // (DataIntegrityViolationException -> 409, see GlobalExceptionHandler). The season is
         // stamped from config, not supplied by the caller.
-        if (userProjectionRepository.existsByUserId(userId)) {
-            throw new DataIntegrityViolationException("User already has a projection");
+        if (userProjectionRepository.existsByUserIdAndKind(userId, kind)) {
+            throw new DataIntegrityViolationException(
+                    "User already has a projection of kind " + kind.getCode());
         }
-        return userProjectionRepository.save(UserProjection.create(userId, name, currentSeason, data));
+        return userProjectionRepository.save(
+                UserProjection.create(userId, name, kind, currentSeason, data));
     }
 
     /**

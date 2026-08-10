@@ -49,15 +49,20 @@ class UserProjectionServiceTest {
         return new ProjectionData(settings, List.of(mcDavid), null);
     }
 
+    private UserProjection create(String name) {
+        return userProjectionService.create(userId, name, ProjectionKind.PROJECTION, sampleData());
+    }
+
     @Test
     void createsAndFindsProjection() {
-        UserProjection created = userProjectionService.create(userId, "My league", sampleData());
+        UserProjection created = create("My league");
 
         assertThat(created.getId()).isNotNull();
         assertThat(created.getCreatedAt()).isNotNull();
 
         UserProjection found = userProjectionService.findById(userId, created.getId());
         assertThat(found.getName()).isEqualTo("My league");
+        assertThat(found.getKind()).isEqualTo(ProjectionKind.PROJECTION);
         assertThat(found.getData().players()).hasSize(1);
         assertThat(found.getData().settings().scoringType()).isEqualTo(ScoringType.POINTS);
         assertThat(userProjectionService.findAll(userId)).hasSize(1);
@@ -65,41 +70,66 @@ class UserProjectionServiceTest {
 
     @Test
     void stampsTheConfiguredCurrentSeason() {
-        UserProjection created = userProjectionService.create(userId, "Seasoned", sampleData());
+        UserProjection created = create("Seasoned");
 
         assertThat(created.getSeason()).isEqualTo(Season.SEASON_2026_2027);
     }
 
     @Test
-    void enforcesUniqueNamePerUser() {
-        userProjectionRepository.saveAndFlush(
-                UserProjection.create(userId, "Dynasty", Season.SEASON_2026_2027, sampleData()));
+    void enforcesUniqueNamePerUserAndKind() {
+        userProjectionRepository.saveAndFlush(UserProjection.create(
+                userId, "Dynasty", ProjectionKind.PROJECTION, Season.SEASON_2026_2027, sampleData()));
 
-        assertThatThrownBy(() -> userProjectionRepository.saveAndFlush(
-                UserProjection.create(userId, "Dynasty", Season.SEASON_2026_2027, sampleData())))
+        assertThatThrownBy(() -> userProjectionRepository.saveAndFlush(UserProjection.create(
+                userId, "Dynasty", ProjectionKind.PROJECTION, Season.SEASON_2026_2027, sampleData())))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    /**
+     * A preset draft is named after its preset, so it must not collide with a user who happened to
+     * give their own projection the same name.
+     */
+    @Test
+    void allowsTheSameNameAcrossKinds() {
+        create("Last Season's Stats");
+
+        UserProjection preset = userProjectionService.create(
+                userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT, sampleData());
+
+        assertThat(preset.getId()).isNotNull();
+        assertThat(userProjectionService.findAll(userId)).hasSize(2);
     }
 
     @Test
     void allowsSameNameForDifferentUsers() {
-        userProjectionService.create(userId, "Standard", sampleData());
+        create("Standard");
 
-        UserProjection other = userProjectionService.create(UUID.randomUUID(), "Standard", sampleData());
+        UserProjection other = userProjectionService.create(
+                UUID.randomUUID(), "Standard", ProjectionKind.PROJECTION, sampleData());
 
         assertThat(other.getId()).isNotNull();
     }
 
     @Test
     void rejectsASecondProjectionForTheSameUser() {
-        userProjectionService.create(userId, "First", sampleData());
+        create("First");
 
-        assertThatThrownBy(() -> userProjectionService.create(userId, "Second", sampleData()))
+        assertThatThrownBy(() -> create("Second"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsASecondPresetDraftForTheSameUser() {
+        userProjectionService.create(userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT, sampleData());
+
+        assertThatThrownBy(() -> userProjectionService.create(
+                userId, "Another preset", ProjectionKind.PRESET_DRAFT, sampleData()))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void findByIdIsScopedToOwner() {
-        UserProjection mine = userProjectionService.create(userId, "Mine", sampleData());
+        UserProjection mine = create("Mine");
 
         assertThatThrownBy(() -> userProjectionService.findById(UUID.randomUUID(), mine.getId()))
                 .isInstanceOf(NoSuchElementException.class);
@@ -107,7 +137,7 @@ class UserProjectionServiceTest {
 
     @Test
     void updatesNameAndData() {
-        UserProjection created = userProjectionService.create(userId, "Old", sampleData());
+        UserProjection created = create("Old");
 
         UpdateProjectionData newData = new UpdateProjectionData(
                 sampleData().settings(),
@@ -126,7 +156,7 @@ class UserProjectionServiceTest {
      */
     @Test
     void omittedPlayersKeepTheStoredRows() {
-        UserProjection created = userProjectionService.create(userId, "Old", sampleData());
+        UserProjection created = create("Old");
         ProjectionSettings changedSettings = sampleData().settings();
 
         UserProjection updated = userProjectionService.update(userId, created.getId(), "New",
@@ -138,7 +168,7 @@ class UserProjectionServiceTest {
 
     @Test
     void emptyPlayersClearsThemRatherThanBeingTreatedAsOmitted() {
-        UserProjection created = userProjectionService.create(userId, "Old", sampleData());
+        UserProjection created = create("Old");
 
         UserProjection updated = userProjectionService.update(userId, created.getId(), "New",
                 new UpdateProjectionData(sampleData().settings(), List.of(), null));
@@ -148,7 +178,7 @@ class UserProjectionServiceTest {
 
     @Test
     void deleteRemovesProjection() {
-        UserProjection created = userProjectionService.create(userId, "Temp", sampleData());
+        UserProjection created = create("Temp");
 
         userProjectionService.delete(userId, created.getId());
 
