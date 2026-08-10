@@ -89,8 +89,10 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     page renders without the player read model.
   - `ProjectionShareController` — `/api/v1/users/{userId}/projections/{projectionId}/share`
     (get/put/delete, ownership-scoped). `SharedProjectionController` —
-    `GET /api/v1/shares/{token}`, the snapshot the BFF serves publicly; it counts the view and
-    returns no owner identity beyond the alias.
+    `GET /api/v1/shares/{token}`, the snapshot the BFF serves publicly; it returns no owner
+    identity beyond the alias. It deliberately counts nothing: the share is fetched once for a
+    chat client's link preview and again for its card, so a per-read counter measured crawlers
+    rather than people (V13 dropped the column).
 - `exception/` — `ErrorDto`, `GlobalExceptionHandler`. The whole service uses **built-in**
   exceptions rather than custom ones (`NoSuchElementException` → 404,
   `DataIntegrityViolationException` → 409, `MethodArgumentNotValidException` → 400).

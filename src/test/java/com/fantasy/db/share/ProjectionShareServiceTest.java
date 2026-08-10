@@ -12,7 +12,6 @@ import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
 import com.fantasy.db.projection.dto.YahooSync;
 import com.fantasy.db.share.dto.SharedPlayer;
-import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -39,9 +38,6 @@ class ProjectionShareServiceTest {
 
     @Autowired
     private UserProjectionService userProjectionService;
-
-    @Autowired
-    private EntityManager entityManager;
 
     private final UUID userId = UUID.randomUUID();
 
@@ -92,7 +88,6 @@ class ProjectionShareServiceTest {
         assertThat(share.getSeason()).isEqualTo(Season.SEASON_2026_2027);
         assertThat(share.getData().players()).hasSize(1);
         assertThat(share.getData().players().getFirst().name()).isEqualTo("Connor McDavid");
-        assertThat(share.getViewCount()).isEqualTo(0L);
     }
 
     @Test
@@ -136,20 +131,6 @@ class ProjectionShareServiceTest {
         assertThat(projectionShareService.share(
                 userId, projection.getId(), null, sharedPlayers("Connor McDavid")).getToken())
                 .isNotEqualTo(originalToken);
-    }
-
-    @Test
-    void countsAViewOnEveryLookupByToken() {
-        UserProjection projection = projection();
-        ProjectionShare share = projectionShareService.share(
-                userId, projection.getId(), null, sharedPlayers("Connor McDavid"));
-
-        projectionShareService.findByToken(share.getToken());
-        projectionShareService.findByToken(share.getToken());
-        entityManager.clear();
-
-        assertThat(projectionShareRepository.findById(share.getId()).orElseThrow().getViewCount())
-                .isEqualTo(2L);
     }
 
     @Test

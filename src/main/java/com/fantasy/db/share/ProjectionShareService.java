@@ -52,12 +52,10 @@ public class ProjectionShareService {
                         "No share found for projection with id: " + projectionId));
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public ProjectionShare findByToken(String token) {
-        ProjectionShare share = projectionShareRepository.findByToken(token)
+        return projectionShareRepository.findByToken(token)
                 .orElseThrow(() -> new NoSuchElementException("No share found for that token"));
-        projectionShareRepository.incrementViewCount(share.getId());
-        return share;
     }
 
     @Transactional

@@ -84,7 +84,6 @@ class ProjectionShareControllerTest {
                 "My league",
                 Season.SEASON_2026_2027,
                 new SharedProjectionData(settings, List.of(mcDavid)),
-                7L,
                 Instant.parse("2026-08-01T10:00:00Z"),
                 Instant.parse("2026-08-02T10:00:00Z"));
     }
@@ -98,7 +97,7 @@ class ProjectionShareControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").value("s0mErAnd0mT0k3nV4lu3ab"))
                 .andExpect(jsonPath("$.authorAlias").value("Alex"))
-                .andExpect(jsonPath("$.viewCount").value(7));
+                .andExpect(jsonPath("$.viewCount").doesNotExist());
     }
 
     @Test
