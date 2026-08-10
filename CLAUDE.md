@@ -49,17 +49,23 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
       existing same-email account, else creates a password-less user.
   - `dto/` — `CreateUserRequest`, `GoogleUserRequest` (validated), `UserResponse`, `ExistsResponse`
 - `projection/` — feature package (saved player projections, scoped to a user):
-  - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `season`, `data`,
-    `created_at`, `updated_at`; unique `(user_id, name)`). `data` is the **modelled,
+  - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `kind`, `season`, `data`,
+    `created_at`, `updated_at`; unique `(user_id, kind, name)`). `data` is the **modelled,
     validated** `ProjectionData` (settings + per-player stats) stored in a **`jsonb`**
     column (`@JdbcTypeCode(SqlTypes.JSON)`). `season` is stamped from the
     `projections.current-season` config (the caller never sends it — not in
     `CreateProjectionRequest`); stored as the 8-digit code, exposed as the `Season` enum.
+    `kind` (`ProjectionKind`) separates the projection a user makes and edits
+    (`PROJECTION`) from the one that only exists to hold a draft started from a preset
+    such as last season's stats (`PRESET_DRAFT`) — a user may keep **one of each**, and
+    only the former is their own work to list. Callers that show "my projections" filter
+    on it; the service stores whichever kind the request asks for (defaulting to
+    `PROJECTION`) and rejects a second of the same kind with a 409.
   - `ProjectionData` — typed DTO: `settings` (`ProjectionSettings`) + `players`
     (`List<PlayerProjection>`). Per-player stats are validated **maps** (`stat → value`)
     keyed by the known stat vocabulary, so adding a stat needs no db-service change.
-  - `Season` / `ScoringType` / `PlayerType` — enums with `@JsonValue` codes
-    (`20262027`, `points`, `skater`).
+  - `Season` / `ScoringType` / `PlayerType` / `ProjectionKind` — enums with `@JsonValue`
+    codes (`20262027`, `points`, `skater`, `preset_draft`).
   - `UserProjectionRepository` / `UserProjectionService` — CRUD scoped to the owning
     user (`findByIdAndUserId` enforces ownership; the unique constraint yields 409).
   - `UserProjectionController` — `/api/v1/users/{userId}/projections` (list/get/create/
