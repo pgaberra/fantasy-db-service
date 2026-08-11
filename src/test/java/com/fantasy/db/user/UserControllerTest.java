@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -142,5 +143,24 @@ class UserControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"faye@example.com\",\"facebookSub\":\"\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getById_returnsTheUser() throws Exception {
+        UUID userId = UUID.randomUUID();
+        User user = new User(userId, "alex@example.com", "hash", java.time.Instant.now());
+        when(userService.findById(userId)).thenReturn(user);
+
+        mockMvc.perform(get("/api/v1/users/{userId}", userId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("alex@example.com"));
+    }
+
+    @Test
+    void getById_returnsNotFoundForAnUnknownUser() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(userService.findById(userId)).thenThrow(new NoSuchElementException("No user"));
+
+        mockMvc.perform(get("/api/v1/users/{userId}", userId)).andExpect(status().isNotFound());
     }
 }
