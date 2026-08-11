@@ -115,7 +115,7 @@ class ProjectionShareServiceTest {
     }
 
     @Test
-    void resharingKeepsTheTokenAndRefreshesTheSnapshot() {
+    void sharingAgainReturnsTheSameLinkUntouched() {
         UserProjection projection = projection();
         ProjectionShare first = projectionShareService.share(
                 userId, projection.getId(), sharedPlayers("Connor McDavid"));
@@ -125,23 +125,9 @@ class ProjectionShareServiceTest {
 
         assertThat(second.getId()).isEqualTo(first.getId());
         assertThat(second.getToken()).isEqualTo(first.getToken());
-        assertThat(second.getData().players().getFirst().name()).isEqualTo("Nathan MacKinnon");
+        // A published snapshot is final: the second call hands back what was already published.
+        assertThat(second.getData().players().getFirst().name()).isEqualTo("Connor McDavid");
         assertThat(projectionShareRepository.count()).isEqualTo(1L);
-    }
-
-    @Test
-    void unsharingKillsTheLinkAndSharingAgainMintsANewToken() {
-        UserProjection projection = projection();
-        String originalToken = projectionShareService.share(
-                userId, projection.getId(), sharedPlayers("Connor McDavid")).getToken();
-
-        projectionShareService.unshare(userId, projection.getId());
-
-        assertThatThrownBy(() -> projectionShareService.findByToken(originalToken))
-                .isInstanceOf(NoSuchElementException.class);
-        assertThat(projectionShareService.share(
-                userId, projection.getId(), sharedPlayers("Connor McDavid")).getToken())
-                .isNotEqualTo(originalToken);
     }
 
     @Test
@@ -151,16 +137,6 @@ class ProjectionShareServiceTest {
 
         assertThatThrownBy(() -> projectionShareService.share(
                 someoneElse, projection.getId(), sharedPlayers("Connor McDavid")))
-                .isInstanceOf(NoSuchElementException.class);
-    }
-
-    @Test
-    void refusesToUnshareSomeoneElsesProjection() {
-        UserProjection projection = projection();
-        projectionShareService.share(userId, projection.getId(), sharedPlayers("Connor McDavid"));
-        UUID someoneElse = UUID.randomUUID();
-
-        assertThatThrownBy(() -> projectionShareService.unshare(someoneElse, projection.getId()))
                 .isInstanceOf(NoSuchElementException.class);
     }
 

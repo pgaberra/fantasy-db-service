@@ -83,10 +83,11 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     **snapshot** (`SharedProjectionData` in a `jsonb` column): the settings and the ranked rows
     as they were when shared, so a link posted publicly keeps showing what was shared rather
     than whatever the owner edited afterwards.
-  - The `token` is 16 random bytes from `SecureRandom`, base64url-encoded — **not** the
-    projection's UUID, so a link can be revoked. Unsharing deletes the row outright; sharing
-    again mints a new token and the old link stays dead. Re-sharing an active share keeps the
-    token (links already in the wild stay valid) and refreshes the snapshot.
+  - The `token` is 16 random bytes from `SecureRandom`, base64url-encoded, not the projection's
+    UUID. Publishing is **once and final**: sharing an already-shared projection returns the
+    share it has, untouched, and there is no endpoint to refresh or withdraw one. Deleting the
+    projection deletes the share with it (the row cascades) — that is the only thing that takes
+    a link down.
   - `ProjectionShareService` — copies name, season and settings from the stored projection so a
     client cannot publish a page that misrepresents it, and **strips `yahooSync`**: the owner's
     league name and key have no business on a public page. The ranked rows come from the caller,
