@@ -1023,7 +1023,9 @@ components:
         players:
           type: array
           description: "Omit to keep the stored player rows unchanged. Send them only\
-            \ when they actually change, e.g. after editing a player's projected stats."
+            \ when they actually change, e.g. after editing a player's projected stats.\
+            \ An empty list means the same as omitting them — a projection covers\
+            \ every player, so there is no way to ask for none."
           items:
             $ref: "#/components/schemas/PlayerProjection"
         draft:
