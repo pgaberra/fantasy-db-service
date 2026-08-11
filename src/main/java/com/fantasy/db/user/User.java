@@ -33,6 +33,12 @@ public class User {
 
     // Bumped whenever every existing session for this user must be invalidated (e.g. a password
     // reset). The BFF stamps it into the refresh token and rejects a refresh whose value is stale.
+    // The account's public name, shown wherever it publishes something. Null until the user
+    // picks one — sharing is what requires it, not signing up. Unique regardless of case, which
+    // the database enforces with an index on LOWER(username).
+    @Column(unique = true, length = 20)
+    private String username;
+
     @Column(name = "token_version", nullable = false)
     private int tokenVersion;
 
@@ -70,6 +76,10 @@ public class User {
         return user;
     }
 
+    public void updateUsername(String username) {
+        this.username = username;
+    }
+
     public void linkGoogle(String googleSub) {
         this.googleSub = googleSub;
         // The provider has proven ownership of this email, so linking it verifies the account.
@@ -97,6 +107,10 @@ public class User {
 
     public UUID getId() {
         return id;
+    }
+
+    public String getUsername() {
+        return username;
     }
 
     public String getEmail() {

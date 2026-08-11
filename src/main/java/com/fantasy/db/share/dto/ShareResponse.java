@@ -13,7 +13,6 @@ public record ShareResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String id,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String projectionId,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String token,
-        @Schema(description = "The name the public page credits, if the owner set one.") String authorAlias,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant createdAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant updatedAt
 ) {
@@ -22,7 +21,6 @@ public record ShareResponse(
                 share.getId().toString(),
                 share.getProjectionId().toString(),
                 share.getToken(),
-                share.getAuthorAlias(),
                 share.getCreatedAt(),
                 share.getUpdatedAt());
     }

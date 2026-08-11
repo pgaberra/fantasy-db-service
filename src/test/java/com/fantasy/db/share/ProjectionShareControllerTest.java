@@ -50,7 +50,6 @@ class ProjectionShareControllerTest {
 
     private static final String VALID_BODY = """
             {
-              "authorAlias": "Alex",
               "players": [
                 { "playerId": 1, "name": "Connor McDavid", "teamAbbrev": "EDM", "positions": ["C"],
                   "type": "skater", "rank": 1, "value": 412.5,
@@ -80,7 +79,6 @@ class ProjectionShareControllerTest {
                 PROJECTION_ID,
                 USER_ID,
                 "s0mErAnd0mT0k3nV4lu3ab",
-                "Alex",
                 "My league",
                 Season.SEASON_2026_2027,
                 new SharedProjectionData(settings, List.of(mcDavid)),
@@ -90,19 +88,18 @@ class ProjectionShareControllerTest {
 
     @Test
     void sharesAProjection() throws Exception {
-        when(projectionShareService.share(eq(USER_ID), eq(PROJECTION_ID), any(), any()))
+        when(projectionShareService.share(eq(USER_ID), eq(PROJECTION_ID), any()))
                 .thenReturn(share());
 
         mockMvc.perform(put(SHARE_PATH).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").value("s0mErAnd0mT0k3nV4lu3ab"))
-                .andExpect(jsonPath("$.authorAlias").value("Alex"))
                 .andExpect(jsonPath("$.viewCount").doesNotExist());
     }
 
     @Test
     void passesTheSubmittedRowsThrough() throws Exception {
-        when(projectionShareService.share(eq(USER_ID), eq(PROJECTION_ID), any(), any()))
+        when(projectionShareService.share(eq(USER_ID), eq(PROJECTION_ID), any()))
                 .thenReturn(share());
 
         mockMvc.perform(put(SHARE_PATH).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
@@ -110,7 +107,7 @@ class ProjectionShareControllerTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<SharedPlayer>> players = ArgumentCaptor.forClass(List.class);
-        verify(projectionShareService).share(eq(USER_ID), eq(PROJECTION_ID), eq("Alex"), players.capture());
+        verify(projectionShareService).share(eq(USER_ID), eq(PROJECTION_ID), players.capture());
         assertThat(players.getValue()).hasSize(1);
         assertThat(players.getValue().getFirst().name()).isEqualTo("Connor McDavid");
         assertThat(players.getValue().getFirst().rank()).isEqualTo(1);
@@ -141,12 +138,13 @@ class ProjectionShareControllerTest {
 
     @Test
     void servesASnapshotByToken() throws Exception {
-        when(projectionShareService.findByToken("s0mErAnd0mT0k3nV4lu3ab")).thenReturn(share());
+        when(projectionShareService.findByToken("s0mErAnd0mT0k3nV4lu3ab"))
+                .thenReturn(new SharedProjection(share(), "alex"));
 
         mockMvc.perform(get("/api/v1/shares/s0mErAnd0mT0k3nV4lu3ab"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("My league"))
-                .andExpect(jsonPath("$.authorAlias").value("Alex"))
+                .andExpect(jsonPath("$.authorUsername").value("alex"))
                 .andExpect(jsonPath("$.season").value("20262027"))
                 .andExpect(jsonPath("$.data.players[0].name").value("Connor McDavid"))
                 .andExpect(jsonPath("$.data.players[0].rank").value(1));

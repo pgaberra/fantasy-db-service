@@ -42,9 +42,6 @@ public class ProjectionShare {
     @Column(nullable = false, updatable = false, length = 64)
     private String token;
 
-    @Column(name = "author_alias", length = 40)
-    private String authorAlias;
-
     @Column(nullable = false)
     private String name;
 
@@ -68,14 +65,13 @@ public class ProjectionShare {
         // Required by JPA
     }
 
-    public ProjectionShare(UUID id, UUID projectionId, UUID userId, String token, String authorAlias,
+    public ProjectionShare(UUID id, UUID projectionId, UUID userId, String token,
                            String name, Season season, SharedProjectionData data,
                            Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.projectionId = projectionId;
         this.userId = userId;
         this.token = token;
-        this.authorAlias = authorAlias;
         this.name = name;
         this.season = season.getCode();
         this.data = data;
@@ -83,15 +79,14 @@ public class ProjectionShare {
         this.updatedAt = updatedAt;
     }
 
-    public static ProjectionShare create(UUID projectionId, UUID userId, String authorAlias, String name,
+    public static ProjectionShare create(UUID projectionId, UUID userId, String name,
                                          Season season, SharedProjectionData data) {
         Instant now = Instant.now();
-        return new ProjectionShare(UUID.randomUUID(), projectionId, userId, generateToken(), authorAlias,
+        return new ProjectionShare(UUID.randomUUID(), projectionId, userId, generateToken(),
                 name, season, data, now, now);
     }
 
-    public void refresh(String authorAlias, String name, SharedProjectionData data) {
-        this.authorAlias = authorAlias;
+    public void refresh(String name, SharedProjectionData data) {
         this.name = name;
         this.data = data;
         this.updatedAt = Instant.now();
@@ -117,10 +112,6 @@ public class ProjectionShare {
 
     public String getToken() {
         return token;
-    }
-
-    public String getAuthorAlias() {
-        return authorAlias;
     }
 
     public String getName() {

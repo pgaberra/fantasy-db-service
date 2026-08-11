@@ -1,6 +1,8 @@
 package com.fantasy.db.user;
 
 import org.junit.jupiter.api.Test;
+import java.util.UUID;
+import java.util.NoSuchElementException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
@@ -90,5 +92,38 @@ class UserServiceTest {
         User second = userService.findOrCreateFacebookUser("fbrepeat@example.com", "facebook-3");
 
         assertThat(second.getId()).isEqualTo(first.getId());
+    }
+
+    @Test
+    void setsTheAccountsPublicName() {
+        User user = userService.create("namer@example.com", "hash");
+
+        User named = userService.setUsername(user.getId(), "alex");
+
+        assertThat(named.getUsername()).isEqualTo("alex");
+    }
+
+    @Test
+    void refusesANameAnotherAccountHolds_whateverTheCase() {
+        User first = userService.create("first@example.com", "hash");
+        User second = userService.create("second@example.com", "hash");
+        userService.setUsername(first.getId(), "alex");
+
+        assertThatThrownBy(() -> userService.setUsername(second.getId(), "ALEX"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void letsAnAccountRestyleItsOwnName() {
+        User user = userService.create("restyle@example.com", "hash");
+        userService.setUsername(user.getId(), "alex");
+
+        assertThat(userService.setUsername(user.getId(), "Alex").getUsername()).isEqualTo("Alex");
+    }
+
+    @Test
+    void refusesToNameAnUnknownAccount() {
+        assertThatThrownBy(() -> userService.setUsername(UUID.randomUUID(), "ghost"))
+                .isInstanceOf(NoSuchElementException.class);
     }
 }

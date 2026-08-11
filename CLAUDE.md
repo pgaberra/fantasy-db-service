@@ -47,7 +47,12 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     - `POST /api/v1/users/google` → 200; find-or-create-or-link for a verified Google
       identity (`{ email, googleSub }`). Resolves by `google_sub`, else links to an
       existing same-email account, else creates a password-less user.
-  - `dto/` — `CreateUserRequest`, `GoogleUserRequest` (validated), `UserResponse`, `ExistsResponse`
+  - `username` — the account's **public name**, nullable until the user picks one and unique
+    regardless of case (a functional index on `LOWER(username)`, since "Alex" and "alex" read as
+    the same name). `PUT /api/v1/users/{userId}/username` sets it; `[A-Za-z0-9_]{3,20}`. Sharing a
+    projection requires it — that is the only thing that forces a name, so signing up does not.
+  - `dto/` — `CreateUserRequest`, `GoogleUserRequest` (validated), `SetUsernameRequest`,
+    `UserResponse`, `ExistsResponse`
 - `projection/` — feature package (saved player projections, scoped to a user):
   - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `kind`, `season`, `data`,
     `created_at`, `updated_at`; unique `(user_id, kind, name)`). `data` is the **modelled,
@@ -90,7 +95,8 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
   - `ProjectionShareController` — `/api/v1/users/{userId}/projections/{projectionId}/share`
     (get/put/delete, ownership-scoped). `SharedProjectionController` —
     `GET /api/v1/shares/{token}`, the snapshot the BFF serves publicly; it returns no owner
-    identity beyond the alias. It deliberately counts nothing: the share is fetched once for a
+    identity beyond their public username, which is read **live** rather than snapshotted so a
+    rename follows onto links already shared. It deliberately counts nothing: the share is fetched once for a
     chat client's link preview and again for its card, so a per-read counter measured crawlers
     rather than people (V13 dropped the column).
 - `exception/` — `ErrorDto`, `GlobalExceptionHandler`. The whole service uses **built-in**

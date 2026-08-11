@@ -6,12 +6,15 @@ import com.fantasy.db.projection.ScoringType;
 import com.fantasy.db.projection.Season;
 import com.fantasy.db.projection.UserProjection;
 import com.fantasy.db.projection.UserProjectionService;
+import com.fantasy.db.user.User;
+import com.fantasy.db.user.UserRepository;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
 import com.fantasy.db.projection.dto.YahooSync;
 import com.fantasy.db.share.dto.SharedPlayer;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -39,7 +42,17 @@ class ProjectionShareServiceTest {
     @Autowired
     private UserProjectionService userProjectionService;
 
-    private final UUID userId = UUID.randomUUID();
+    @Autowired
+    private UserRepository userRepository;
+
+    private UUID userId;
+
+    @BeforeEach
+    void createOwner() {
+        User owner = userRepository.save(User.create("owner@example.com", "hash"));
+        owner.updateUsername("alex");
+        userId = userRepository.save(owner).getId();
+    }
 
     private static ProjectionData projectionData() {
         ProjectionSettings settings = new ProjectionSettings(
@@ -80,10 +93,9 @@ class ProjectionShareServiceTest {
         UserProjection projection = projection();
 
         ProjectionShare share = projectionShareService.share(
-                userId, projection.getId(), "Alex", sharedPlayers("Connor McDavid"));
+                userId, projection.getId(), sharedPlayers("Connor McDavid"));
 
         assertThat(share.getToken()).hasSizeGreaterThanOrEqualTo(20);
-        assertThat(share.getAuthorAlias()).isEqualTo("Alex");
         assertThat(share.getName()).isEqualTo("My league");
         assertThat(share.getSeason()).isEqualTo(Season.SEASON_2026_2027);
         assertThat(share.getData().players()).hasSize(1);
@@ -95,7 +107,7 @@ class ProjectionShareServiceTest {
         UserProjection projection = projection();
 
         ProjectionShare share = projectionShareService.share(
-                userId, projection.getId(), null, sharedPlayers("Connor McDavid"));
+                userId, projection.getId(), sharedPlayers("Connor McDavid"));
 
         assertThat(share.getData().settings().scoringType()).isEqualTo(ScoringType.POINTS);
         assertThat(share.getData().settings().statWeights()).containsEntry("goals", 4.5);
@@ -106,14 +118,13 @@ class ProjectionShareServiceTest {
     void resharingKeepsTheTokenAndRefreshesTheSnapshot() {
         UserProjection projection = projection();
         ProjectionShare first = projectionShareService.share(
-                userId, projection.getId(), "Alex", sharedPlayers("Connor McDavid"));
+                userId, projection.getId(), sharedPlayers("Connor McDavid"));
 
         ProjectionShare second = projectionShareService.share(
-                userId, projection.getId(), "Alexander", sharedPlayers("Nathan MacKinnon"));
+                userId, projection.getId(), sharedPlayers("Nathan MacKinnon"));
 
         assertThat(second.getId()).isEqualTo(first.getId());
         assertThat(second.getToken()).isEqualTo(first.getToken());
-        assertThat(second.getAuthorAlias()).isEqualTo("Alexander");
         assertThat(second.getData().players().getFirst().name()).isEqualTo("Nathan MacKinnon");
         assertThat(projectionShareRepository.count()).isEqualTo(1L);
     }
@@ -122,14 +133,14 @@ class ProjectionShareServiceTest {
     void unsharingKillsTheLinkAndSharingAgainMintsANewToken() {
         UserProjection projection = projection();
         String originalToken = projectionShareService.share(
-                userId, projection.getId(), null, sharedPlayers("Connor McDavid")).getToken();
+                userId, projection.getId(), sharedPlayers("Connor McDavid")).getToken();
 
         projectionShareService.unshare(userId, projection.getId());
 
         assertThatThrownBy(() -> projectionShareService.findByToken(originalToken))
                 .isInstanceOf(NoSuchElementException.class);
         assertThat(projectionShareService.share(
-                userId, projection.getId(), null, sharedPlayers("Connor McDavid")).getToken())
+                userId, projection.getId(), sharedPlayers("Connor McDavid")).getToken())
                 .isNotEqualTo(originalToken);
     }
 
@@ -139,17 +150,42 @@ class ProjectionShareServiceTest {
         UUID someoneElse = UUID.randomUUID();
 
         assertThatThrownBy(() -> projectionShareService.share(
-                someoneElse, projection.getId(), null, sharedPlayers("Connor McDavid")))
+                someoneElse, projection.getId(), sharedPlayers("Connor McDavid")))
                 .isInstanceOf(NoSuchElementException.class);
     }
 
     @Test
     void refusesToUnshareSomeoneElsesProjection() {
         UserProjection projection = projection();
-        projectionShareService.share(userId, projection.getId(), null, sharedPlayers("Connor McDavid"));
+        projectionShareService.share(userId, projection.getId(), sharedPlayers("Connor McDavid"));
         UUID someoneElse = UUID.randomUUID();
 
         assertThatThrownBy(() -> projectionShareService.unshare(someoneElse, projection.getId()))
                 .isInstanceOf(NoSuchElementException.class);
+    }
+
+    @Test
+    void refusesToShareUntilTheAccountHasAUsername() {
+        User nameless = userRepository.save(User.create("nameless@example.com", "hash"));
+        UserProjection projection = userProjectionService.create(
+                nameless.getId(), "Their league", ProjectionKind.PROJECTION, projectionData());
+
+        assertThatThrownBy(() -> projectionShareService.share(
+                nameless.getId(), projection.getId(), sharedPlayers("Connor McDavid")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("username");
+    }
+
+    @Test
+    void readsTheOwnersCurrentName_soARenameFollowsOntoLinksAlreadyShared() {
+        UserProjection projection = projection();
+        String token = projectionShareService.share(
+                userId, projection.getId(), sharedPlayers("Connor McDavid")).getToken();
+
+        User owner = userRepository.findById(userId).orElseThrow();
+        owner.updateUsername("alexander");
+        userRepository.save(owner);
+
+        assertThat(projectionShareService.findByToken(token).authorUsername()).isEqualTo("alexander");
     }
 }

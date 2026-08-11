@@ -45,14 +45,15 @@ public class ProjectionShareController {
                     + "posted elsewhere stay valid and start showing the refreshed snapshot.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Share created or refreshed"),
-        @ApiResponse(responseCode = "400", description = "Validation failed (too many rows, oversized name/alias)"),
+        @ApiResponse(responseCode = "400", description = "Validation failed (too many rows, oversized name)"),
+        @ApiResponse(responseCode = "409", description = "The owner has not set a username yet"),
         @ApiResponse(responseCode = "404", description = "No such projection for this user")
     })
     @PutMapping
     public ShareResponse share(@PathVariable UUID userId, @PathVariable UUID projectionId,
                                @Valid @RequestBody CreateShareRequest request) {
         return ShareResponse.from(projectionShareService.share(
-                userId, projectionId, request.authorAlias(), request.players()));
+                userId, projectionId, request.players()));
     }
 
     @Operation(summary = "Take the projection's public link down",
