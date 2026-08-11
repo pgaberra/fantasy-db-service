@@ -23,6 +23,12 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
+    public User findById(UUID userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("No user found with id: " + userId));
+    }
+
+    @Transactional(readOnly = true)
     public boolean existsByEmail(String email) {
         return userRepository.existsByEmailIgnoreCase(email);
     }

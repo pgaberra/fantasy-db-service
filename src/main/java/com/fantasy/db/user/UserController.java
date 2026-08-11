@@ -108,4 +108,14 @@ public class UserController {
         return UserResponse.from(userService.setUsername(userId, request.username()));
     }
 
+    @Operation(summary = "Fetch a user by id")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "User found"),
+        @ApiResponse(responseCode = "404", description = "No such user")
+    })
+    @GetMapping("/{userId}")
+    public UserResponse getById(@PathVariable UUID userId) {
+        return UserResponse.from(userService.findById(userId));
+    }
+
 }
