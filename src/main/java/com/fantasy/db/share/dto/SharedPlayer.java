@@ -22,6 +22,8 @@ public record SharedPlayer(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @NotBlank @Size(max = 100) String name,
         @Schema(description = "NHL team abbreviation, absent for a player without one.")
         @Size(max = 10) String teamAbbrev,
+        @Schema(description = "Player headshot URL, copied at share time so the public page needs no player read model. Absent for a player without one.")
+        @Size(max = 300) String headshot,
         @Schema(description = "Eligible positions, for skaters. Absent for goalies.")
         @Size(max = 6) List<@Size(max = 4) String> positions,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @NotNull PlayerType type,
