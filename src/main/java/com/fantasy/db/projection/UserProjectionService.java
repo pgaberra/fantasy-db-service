@@ -56,13 +56,21 @@ public class UserProjectionService {
      * and unchanged by most edits — in which case the stored ones are carried over. Merging here
      * rather than in the caller keeps the read and the write inside one transaction, so two
      * concurrent updates cannot interleave into a projection that is half old and half new.
+     *
+     * <p><b>An empty list counts as omitted.</b> A projection covers every player in the league,
+     * so there is no such thing as one with no rows, and nothing can ask for that on purpose.
+     * Meanwhile a caller easily sends one by accident: the BFF's OpenAPI-generated request model
+     * initialises the field to an empty {@code ArrayList}, so a body that leaves {@code players}
+     * out arrives here as empty rather than null. Treating that as "replace with nothing" wiped
+     * every player from a projection the moment its owner changed a setting.
      */
     @Transactional
     public UserProjection update(UUID userId, UUID id, String name, UpdateProjectionData incoming) {
         UserProjection projection = findById(userId, id);
-        List<PlayerProjection> players = incoming.players() != null
-                ? incoming.players()
-                : projection.getData().players();
+        List<PlayerProjection> incomingPlayers = incoming.players();
+        List<PlayerProjection> players = incomingPlayers == null || incomingPlayers.isEmpty()
+                ? projection.getData().players()
+                : incomingPlayers;
         projection.update(name, new ProjectionData(incoming.settings(), players, incoming.draft()));
         return userProjectionRepository.save(projection);
     }

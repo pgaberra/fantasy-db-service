@@ -23,7 +23,9 @@ import java.util.List;
 public record UpdateProjectionData(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @NotNull @Valid ProjectionSettings settings,
         @Schema(description = "Omit to keep the stored player rows unchanged. Send them only when "
-                + "they actually change, e.g. after editing a player's projected stats.")
+                + "they actually change, e.g. after editing a player's projected stats. An empty "
+                + "list means the same as omitting them — a projection covers every player, so "
+                + "there is no way to ask for none.")
         @Valid List<PlayerProjection> players,
         @Schema(description = "In-draft state for this projection. Replaced on every update — omit it to clear.")
         @Valid DraftState draft
