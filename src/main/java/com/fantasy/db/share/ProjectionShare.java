@@ -18,9 +18,9 @@ import java.util.UUID;
  * A public, read-only snapshot of one saved projection, reachable by an unguessable token.
  *
  * <p>The snapshot is deliberate: a link posted somewhere public keeps showing what was shared,
- * not whatever the owner edited afterwards. Re-sharing refreshes the snapshot but keeps the
- * token, so links already in the wild stay valid; unsharing deletes the row, so a later share
- * mints a new token and the old link is dead for good.
+ * not whatever the owner edited afterwards. It is also final — a published snapshot cannot be
+ * refreshed or withdrawn, and sharing the same projection again returns the link it already has.
+ * Deleting the projection deletes the share with it.
  */
 @Entity
 @Table(name = "projection_shares")
@@ -86,11 +86,6 @@ public class ProjectionShare {
                 name, season, data, now, now);
     }
 
-    public void refresh(String name, SharedProjectionData data) {
-        this.name = name;
-        this.data = data;
-        this.updatedAt = Instant.now();
-    }
 
     private static String generateToken() {
         byte[] bytes = new byte[TOKEN_BYTES];

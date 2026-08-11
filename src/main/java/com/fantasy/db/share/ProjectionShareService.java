@@ -30,9 +30,13 @@ public class ProjectionShareService {
     }
 
     /**
-     * Publishes (or re-publishes) a projection. The rows come from the caller, which owns the
-     * ranking; the settings, name and season are copied from the stored projection so a client
-     * cannot publish a page that misrepresents the projection it points at.
+     * Publishes a projection, once. The rows come from the caller, which owns the ranking; the
+     * settings, name and season are copied from the stored projection so a client cannot publish
+     * a page that misrepresents the projection it points at.
+     *
+     * <p>A projection that is already shared keeps the share it has, untouched — there is no way
+     * to refresh or withdraw a published snapshot. Deleting the projection deletes the share with
+     * it (the row cascades), which is the only thing that takes a link down.
      */
     @Transactional
     public ProjectionShare share(UUID userId, UUID projectionId, List<SharedPlayer> players) {
@@ -49,10 +53,6 @@ public class ProjectionShareService {
                 new SharedProjectionData(publishable(projection.getData().settings()), players);
 
         return projectionShareRepository.findByProjectionIdAndUserId(projectionId, userId)
-                .map(existing -> {
-                    existing.refresh(projection.getName(), data);
-                    return projectionShareRepository.save(existing);
-                })
                 .orElseGet(() -> projectionShareRepository.save(ProjectionShare.create(
                         projectionId, userId, projection.getName(), projection.getSeason(), data)));
     }
@@ -78,10 +78,6 @@ public class ProjectionShareService {
         return new SharedProjection(share, authorUsername);
     }
 
-    @Transactional
-    public void unshare(UUID userId, UUID projectionId) {
-        projectionShareRepository.delete(findByProjection(userId, projectionId));
-    }
 
     /**
      * Strips the Yahoo sync details before the settings go on a public page — they carry the
