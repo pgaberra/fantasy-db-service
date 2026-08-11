@@ -22,13 +22,14 @@ public class SharedProjectionController {
     }
 
     @Operation(summary = "Fetch a shared snapshot by its token",
-            description = "Counts the view. Carries no owner identity beyond the alias they chose.")
+            description = "Carries no owner identity beyond their public username.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Snapshot found"),
         @ApiResponse(responseCode = "404", description = "No share with that token")
     })
     @GetMapping("/{token}")
     public SharedProjectionResponse get(@PathVariable String token) {
-        return SharedProjectionResponse.from(projectionShareService.findByToken(token));
+        SharedProjection shared = projectionShareService.findByToken(token);
+        return SharedProjectionResponse.from(shared.share(), shared.authorUsername());
     }
 }

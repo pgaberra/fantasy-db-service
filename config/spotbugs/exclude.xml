@@ -12,4 +12,16 @@
     <Match>
         <Bug pattern="SERVLET_HEADER"/>
     </Match>
+
+    <!-- IMPROPER_UNICODE fires on any case-insensitive comparison, on the grounds that exotic
+         characters can case-fold into ASCII. Usernames are validated to ^[A-Za-z0-9_]+$ before
+         they reach this comparison, so there is no non-ASCII input for that to happen with; the
+         comparison exists so an account may restyle the case of its own name. Scoped to the one
+         method, so a genuine case-folding hazard elsewhere is still caught. -->
+    <Match>
+        <Bug pattern="IMPROPER_UNICODE"/>
+        <Class name="com.fantasy.db.user.UserService"/>
+        <Method name="setUsername"/>
+    </Match>
+
 </FindBugsFilter>

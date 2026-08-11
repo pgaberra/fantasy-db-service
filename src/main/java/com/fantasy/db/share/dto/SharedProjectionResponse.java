@@ -13,17 +13,18 @@ import java.time.Instant;
 public record SharedProjectionResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String token,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String name,
-        @Schema(description = "The name the owner chose to be credited as, if any.") String authorAlias,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "The owner's public name. Read live rather than snapshotted: a rename should follow onto links already shared.") String authorUsername,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Season season,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) SharedProjectionData data,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant createdAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant updatedAt
 ) {
-    public static SharedProjectionResponse from(ProjectionShare share) {
+    public static SharedProjectionResponse from(ProjectionShare share, String authorUsername) {
         return new SharedProjectionResponse(
                 share.getToken(),
                 share.getName(),
-                share.getAuthorAlias(),
+                authorUsername,
                 share.getSeason(),
                 share.getData(),
                 share.getCreatedAt(),

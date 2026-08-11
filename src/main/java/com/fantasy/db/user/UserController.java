@@ -1,6 +1,7 @@
 package com.fantasy.db.user;
 
 import com.fantasy.db.user.dto.CreateUserRequest;
+import com.fantasy.db.user.dto.SetUsernameRequest;
 import com.fantasy.db.user.dto.ExistsResponse;
 import com.fantasy.db.user.dto.FacebookUserRequest;
 import com.fantasy.db.user.dto.GoogleUserRequest;
@@ -13,12 +14,16 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
 
 import java.util.NoSuchElementException;
 
@@ -89,4 +94,18 @@ public class UserController {
         return UserResponse.from(
                 userService.findOrCreateFacebookUser(request.email(), request.facebookSub()));
     }
+    @Operation(summary = "Set the account's public name",
+            description = "Nullable on the account until it is set; sharing a projection requires it.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Username set"),
+        @ApiResponse(responseCode = "400", description = "Validation failed (length or characters)"),
+        @ApiResponse(responseCode = "404", description = "No such user"),
+        @ApiResponse(responseCode = "409", description = "Another account already holds that name")
+    })
+    @PutMapping("/{userId}/username")
+    public UserResponse setUsername(@PathVariable UUID userId,
+                                    @Valid @RequestBody SetUsernameRequest request) {
+        return UserResponse.from(userService.setUsername(userId, request.username()));
+    }
+
 }

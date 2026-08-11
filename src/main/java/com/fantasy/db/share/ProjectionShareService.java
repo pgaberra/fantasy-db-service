@@ -2,6 +2,8 @@ package com.fantasy.db.share;
 
 import com.fantasy.db.projection.UserProjection;
 import com.fantasy.db.projection.UserProjectionRepository;
+import com.fantasy.db.user.User;
+import com.fantasy.db.user.UserRepository;
 import com.fantasy.db.projection.dto.ProjectionSettings;
 import com.fantasy.db.share.dto.SharedPlayer;
 import com.fantasy.db.share.dto.SharedProjectionData;
@@ -17,11 +19,14 @@ public class ProjectionShareService {
 
     private final ProjectionShareRepository projectionShareRepository;
     private final UserProjectionRepository userProjectionRepository;
+    private final UserRepository userRepository;
 
     public ProjectionShareService(ProjectionShareRepository projectionShareRepository,
-                                  UserProjectionRepository userProjectionRepository) {
+                                  UserProjectionRepository userProjectionRepository,
+                                  UserRepository userRepository) {
         this.projectionShareRepository = projectionShareRepository;
         this.userProjectionRepository = userProjectionRepository;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -30,7 +35,14 @@ public class ProjectionShareService {
      * cannot publish a page that misrepresents the projection it points at.
      */
     @Transactional
-    public ProjectionShare share(UUID userId, UUID projectionId, String authorAlias, List<SharedPlayer> players) {
+    public ProjectionShare share(UUID userId, UUID projectionId, List<SharedPlayer> players) {
+        User owner = userRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("No user found with id: " + userId));
+        if (owner.getUsername() == null || owner.getUsername().isBlank()) {
+            // A public page has to credit someone, and the account is the only place that name
+            // can come from now. Rejected here rather than trusted from the caller.
+            throw new IllegalStateException("A username is required before sharing a projection");
+        }
         UserProjection projection = userProjectionRepository.findByIdAndUserId(projectionId, userId)
                 .orElseThrow(() -> new NoSuchElementException("No projection found with id: " + projectionId));
         SharedProjectionData data =
@@ -38,11 +50,11 @@ public class ProjectionShareService {
 
         return projectionShareRepository.findByProjectionIdAndUserId(projectionId, userId)
                 .map(existing -> {
-                    existing.refresh(authorAlias, projection.getName(), data);
+                    existing.refresh(projection.getName(), data);
                     return projectionShareRepository.save(existing);
                 })
                 .orElseGet(() -> projectionShareRepository.save(ProjectionShare.create(
-                        projectionId, userId, authorAlias, projection.getName(), projection.getSeason(), data)));
+                        projectionId, userId, projection.getName(), projection.getSeason(), data)));
     }
 
     @Transactional(readOnly = true)
@@ -52,10 +64,18 @@ public class ProjectionShareService {
                         "No share found for projection with id: " + projectionId));
     }
 
+    /**
+     * The snapshot plus the owner's current name. The name is read now rather than copied at
+     * share time, so renaming an account follows onto links already out there.
+     */
     @Transactional(readOnly = true)
-    public ProjectionShare findByToken(String token) {
-        return projectionShareRepository.findByToken(token)
+    public SharedProjection findByToken(String token) {
+        ProjectionShare share = projectionShareRepository.findByToken(token)
                 .orElseThrow(() -> new NoSuchElementException("No share found for that token"));
+        String authorUsername = userRepository.findById(share.getUserId())
+                .map(User::getUsername)
+                .orElseThrow(() -> new NoSuchElementException("No user found for that share"));
+        return new SharedProjection(share, authorUsername);
     }
 
     @Transactional

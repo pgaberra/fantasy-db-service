@@ -4,7 +4,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class UserService {
@@ -34,6 +36,25 @@ public class UserService {
         // DataIntegrityViolationException from the unique constraint (the source of
         // truth), which the advice maps to 409 — same as the check above.
         return userRepository.save(User.create(email, passwordHash));
+    }
+
+    /**
+     * Sets the account's public name. Taking a name someone else already holds is a conflict,
+     * regardless of case: two accounts called "Alex" and "alex" would be the same name to anyone
+     * reading a shared page. Re-setting your own name to a different case is allowed.
+     */
+    @Transactional
+    public User setUsername(UUID userId, String username) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("No user found with id: " + userId));
+        boolean ownName = username.equalsIgnoreCase(user.getUsername());
+        if (!ownName && userRepository.existsByUsernameIgnoreCase(username)) {
+            throw new DataIntegrityViolationException("Username already taken: " + username);
+        }
+        user.updateUsername(username);
+        // A concurrent claim of the same name surfaces from the unique index — the source of
+        // truth — as the same exception the check above throws.
+        return userRepository.save(user);
     }
 
     /**

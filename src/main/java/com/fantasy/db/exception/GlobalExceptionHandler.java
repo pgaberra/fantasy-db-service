@@ -31,6 +31,16 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, "The resource conflicts with an existing one");
     }
 
+    /**
+     * A precondition on the caller's own data is not met — sharing a projection before the account
+     * has a username, for instance. The request is well formed, so this is a conflict with the
+     * current state rather than a bad request.
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorDto> handleIllegalState(IllegalStateException e) {
+        return build(HttpStatus.CONFLICT, e.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorDto> handleValidation(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()
