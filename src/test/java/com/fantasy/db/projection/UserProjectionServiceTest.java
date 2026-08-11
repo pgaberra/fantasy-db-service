@@ -166,14 +166,21 @@ class UserProjectionServiceTest {
         assertThat(updated.getData().players()).isEqualTo(sampleData().players());
     }
 
+    /**
+     * This asserted the opposite until an autosave emptied a real projection. The distinction
+     * between "omitted" and "empty" cannot survive the trip: the BFF's OpenAPI-generated request
+     * model initialises the list to an empty {@code ArrayList}, so a body that leaves players out
+     * arrives here as empty. Since a projection covers every player in the league, no caller ever
+     * wants none — the safe reading of an empty list is the same as no list at all.
+     */
     @Test
-    void emptyPlayersClearsThemRatherThanBeingTreatedAsOmitted() {
+    void emptyPlayersKeepTheStoredRowsToo() {
         UserProjection created = create("Old");
 
         UserProjection updated = userProjectionService.update(userId, created.getId(), "New",
                 new UpdateProjectionData(sampleData().settings(), List.of(), null));
 
-        assertThat(updated.getData().players()).isEmpty();
+        assertThat(updated.getData().players()).isEqualTo(sampleData().players());
     }
 
     @Test
