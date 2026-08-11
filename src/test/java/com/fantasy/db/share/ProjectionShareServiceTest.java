@@ -77,6 +77,7 @@ class ProjectionShareServiceTest {
                 1,
                 topName,
                 "EDM",
+                "https://example.test/headshot.png",
                 List.of("C"),
                 PlayerType.SKATER,
                 1,

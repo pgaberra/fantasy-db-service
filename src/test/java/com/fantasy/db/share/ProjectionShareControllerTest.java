@@ -51,6 +51,7 @@ class ProjectionShareControllerTest {
             {
               "players": [
                 { "playerId": 1, "name": "Connor McDavid", "teamAbbrev": "EDM", "positions": ["C"],
+                  "headshot": "https://example.test/mcdavid.png",
                   "type": "skater", "rank": 1, "value": 412.5,
                   "stats": { "utility": { "gp": 82 }, "scoring": { "goals": 64 } } }
               ]
@@ -71,7 +72,8 @@ class ProjectionShareControllerTest {
                 ScoringType.POINTS, Map.of("goals", 4.5), List.of("goals"), List.of("gp"),
                 Map.of(), Map.of("goals", 0), true, 12, null, null, null);
         SharedPlayer mcDavid = new SharedPlayer(
-                1, "Connor McDavid", "EDM", List.of("C"), PlayerType.SKATER, 1, 412.5,
+                1, "Connor McDavid", "EDM", "https://example.test/mcdavid.png", List.of("C"),
+                PlayerType.SKATER, 1, 412.5,
                 new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)));
         return new ProjectionShare(
                 UUID.fromString("33333333-3333-3333-3333-333333333333"),
