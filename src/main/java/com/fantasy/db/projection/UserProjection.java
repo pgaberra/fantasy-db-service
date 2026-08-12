@@ -3,6 +3,8 @@ package com.fantasy.db.projection;
 import com.fantasy.db.projection.dto.ProjectionData;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -15,8 +17,8 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "user_projections",
-        uniqueConstraints = @UniqueConstraint(name = "uk_user_projections_user_name",
-                columnNames = {"user_id", "name"}))
+        uniqueConstraints = @UniqueConstraint(name = "uk_user_projections_user_kind_name",
+                columnNames = {"user_id", "kind", "name"}))
 public class UserProjection {
 
     @Id
@@ -28,6 +30,10 @@ public class UserProjection {
 
     @Column(nullable = false)
     private String name;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false, length = 20)
+    private ProjectionKind kind;
 
     // Stored as the season's 8-digit code (e.g. "20262027"); exposed as the Season enum.
     // Kept as a plain String column so Hibernate doesn't auto-generate an enum CHECK
@@ -49,20 +55,22 @@ public class UserProjection {
         // Required by JPA
     }
 
-    public UserProjection(UUID id, UUID userId, String name, Season season, ProjectionData data,
-                          Instant createdAt, Instant updatedAt) {
+    public UserProjection(UUID id, UUID userId, String name, ProjectionKind kind, Season season,
+                          ProjectionData data, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.userId = userId;
         this.name = name;
+        this.kind = kind;
         this.season = season.getCode();
         this.data = data;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
 
-    public static UserProjection create(UUID userId, String name, Season season, ProjectionData data) {
+    public static UserProjection create(UUID userId, String name, ProjectionKind kind, Season season,
+                                        ProjectionData data) {
         Instant now = Instant.now();
-        return new UserProjection(UUID.randomUUID(), userId, name, season, data, now, now);
+        return new UserProjection(UUID.randomUUID(), userId, name, kind, season, data, now, now);
     }
 
     public void update(String name, ProjectionData data) {
@@ -81,6 +89,10 @@ public class UserProjection {
 
     public String getName() {
         return name;
+    }
+
+    public ProjectionKind getKind() {
+        return kind;
     }
 
     public Season getSeason() {

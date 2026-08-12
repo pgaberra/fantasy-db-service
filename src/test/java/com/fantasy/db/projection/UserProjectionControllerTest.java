@@ -88,17 +88,21 @@ class UserProjectionControllerTest {
             """;
 
     private UserProjection projection(String name) {
-        return projection(name, null);
+        return projection(name, null, ProjectionKind.PROJECTION);
     }
 
     private UserProjection projection(String name, DraftState draft) {
+        return projection(name, draft, ProjectionKind.PROJECTION);
+    }
+
+    private UserProjection projection(String name, DraftState draft, ProjectionKind kind) {
         ProjectionData data = new ProjectionData(
                 new ProjectionSettings(ScoringType.POINTS, Map.of("goals", 4.5), List.of("goals"),
                         List.of("gp"), Map.of(), Map.of("goals", 0), true, 12, null, null, null),
                 List.of(new PlayerProjection(1, PlayerType.SKATER,
                         new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)))),
                 draft);
-        return new UserProjection(PROJECTION_ID, USER_ID, name, Season.SEASON_2026_2027, data,
+        return new UserProjection(PROJECTION_ID, USER_ID, name, kind, Season.SEASON_2026_2027, data,
                 Instant.now(), Instant.now());
     }
 
@@ -119,7 +123,18 @@ class UserProjectionControllerTest {
                 .andExpect(jsonPath("$[0].name").value("My league"))
                 .andExpect(jsonPath("$[0].season").value("20262027"))
                 .andExpect(jsonPath("$[0].id").value(PROJECTION_ID.toString()))
+                .andExpect(jsonPath("$[0].kind").value("projection"))
                 .andExpect(jsonPath("$[0].draftStatus").value("none"));
+    }
+
+    @Test
+    void listExposesTheKindSoCallersCanTellPresetDraftsApart() throws Exception {
+        when(userProjectionService.findAll(USER_ID)).thenReturn(
+                List.of(projection("Last Season's Stats", draft(null), ProjectionKind.PRESET_DRAFT)));
+
+        mockMvc.perform(get("/api/v1/users/{userId}/projections", USER_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].kind").value("preset_draft"));
     }
 
     @Test
@@ -141,6 +156,7 @@ class UserProjectionControllerTest {
         mockMvc.perform(get("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("My league"))
+                .andExpect(jsonPath("$.kind").value("projection"))
                 .andExpect(jsonPath("$.data.settings.scoringType").value("points"))
                 .andExpect(jsonPath("$.data.players[0].stats.scoring.goals").value(64.0));
     }
@@ -156,7 +172,7 @@ class UserProjectionControllerTest {
 
     @Test
     void createReturns201() throws Exception {
-        when(userProjectionService.create(eq(USER_ID), eq("My league"), any()))
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PROJECTION), any()))
                 .thenReturn(projection("My league"));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
@@ -165,6 +181,22 @@ class UserProjectionControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("My league"))
                 .andExpect(jsonPath("$.season").value("20262027"));
+    }
+
+    @Test
+    void createStoresTheRequestedKind() throws Exception {
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any()))
+                .thenReturn(projection("My league", null, ProjectionKind.PRESET_DRAFT));
+
+        mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY.replace("\"name\": \"My league\",",
+                                "\"name\": \"My league\", \"kind\": \"preset_draft\",")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.kind").value("preset_draft"));
+
+        verify(userProjectionService)
+                .create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any());
     }
 
     @Test
@@ -177,7 +209,7 @@ class UserProjectionControllerTest {
 
     @Test
     void createReturns409WhenUserAlreadyHasProjection() throws Exception {
-        when(userProjectionService.create(eq(USER_ID), eq("My league"), any()))
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PROJECTION), any()))
                 .thenThrow(new DataIntegrityViolationException("User already has a projection"));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)

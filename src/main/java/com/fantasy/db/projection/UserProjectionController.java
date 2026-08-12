@@ -58,15 +58,16 @@ public class UserProjectionController {
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Projection created"),
         @ApiResponse(responseCode = "400", description = "Validation failed (blank name/data or too large)"),
-        @ApiResponse(responseCode = "409", description = "The user already has a projection with that name")
+        @ApiResponse(responseCode = "409",
+                description = "The user already has a projection of that kind, or one with that name")
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<ProjectionResponse> create(
             @PathVariable UUID userId,
             @Valid @RequestBody CreateProjectionRequest request) {
-        UserProjection projection =
-                userProjectionService.create(userId, request.name(), request.data());
+        UserProjection projection = userProjectionService.create(
+                userId, request.name(), request.kindOrDefault(), request.data());
         return ResponseEntity.status(HttpStatus.CREATED).body(ProjectionResponse.from(projection));
     }
 
