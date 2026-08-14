@@ -80,9 +80,9 @@ public class ProjectionShareService {
 
 
     /**
-     * Strips the Yahoo sync details before the settings go on a public page — they carry the
-     * owner's league name and key, which is about their private league rather than the
-     * projection anyone with the link came to look at.
+     * Strips the league sync details before the settings go on a public page — they carry the
+     * owner's league name and its id on Yahoo or ESPN, which is about their private league rather
+     * than the projection anyone with the link came to look at.
      */
     private ProjectionSettings publishable(ProjectionSettings settings) {
         return new ProjectionSettings(
@@ -96,6 +96,7 @@ public class ProjectionShareService {
                 settings.leagueSize(),
                 settings.rosterSlots(),
                 settings.minGoalieGames(),
+                null,
                 null);
     }
 }
