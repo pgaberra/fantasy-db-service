@@ -8,6 +8,7 @@ import com.fantasy.db.projection.UserProjection;
 import com.fantasy.db.projection.UserProjectionService;
 import com.fantasy.db.user.User;
 import com.fantasy.db.user.UserRepository;
+import com.fantasy.db.projection.dto.EspnSync;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.ProjectionData;
@@ -66,7 +67,8 @@ class ProjectionShareServiceTest {
                 12,
                 null,
                 null,
-                new YahooSync("Alexander's Beer League", "453.l.12345", Instant.parse("2026-08-01T10:00:00Z")));
+                new YahooSync("Alexander's Beer League", "453.l.12345", Instant.parse("2026-08-01T10:00:00Z")),
+                new EspnSync("Alexander's ESPN League", "123456", Instant.parse("2026-08-01T10:00:00Z")));
         PlayerProjection mcDavid = new PlayerProjection(
                 1, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)));
         return new ProjectionData(settings, List.of(mcDavid), null);
@@ -112,7 +114,9 @@ class ProjectionShareServiceTest {
 
         assertThat(share.getData().settings().scoringType()).isEqualTo(ScoringType.POINTS);
         assertThat(share.getData().settings().statWeights()).containsEntry("goals", 4.5);
+        // Neither platform's league details belong on a page anyone with the link can open.
         assertThat(share.getData().settings().yahooSync()).isNull();
+        assertThat(share.getData().settings().espnSync()).isNull();
     }
 
     @Test

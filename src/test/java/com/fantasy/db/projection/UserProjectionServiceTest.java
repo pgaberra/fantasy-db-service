@@ -43,6 +43,7 @@ class UserProjectionServiceTest {
                 12,
                 null,
                 null,
+                null,
                 null);
         PlayerProjection mcDavid = new PlayerProjection(
                 1, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)));
