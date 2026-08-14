@@ -1,5 +1,6 @@
 package com.fantasy.db.projection;
 
+import com.fantasy.db.exception.DestructiveUpdateException;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.UpdateProjectionData;
@@ -53,15 +54,29 @@ public class UserProjectionService {
      * and unchanged by most edits — in which case the stored ones are carried over. Merging here
      * rather than in the caller keeps the read and the write inside one transaction, so two
      * concurrent updates cannot interleave into a projection that is half old and half new.
+     *
+     * <p>Sending an empty list used to clear the rows, on the reasoning that only an explicit
+     * empty could mean "remove them". It turned out a client can arrive at one by accident: on
+     * 2026-08-13 a projection loaded against a player pool that had not arrived dropped every row
+     * and autosaved the result, destroying 1589 rows that no backup existed for. Nothing about a
+     * projection is served by emptying it in one request, so the case is refused outright.
      */
     @Transactional
     public UserProjection update(UUID userId, UUID id, String name, UpdateProjectionData incoming) {
         UserProjection projection = findById(userId, id);
-        List<PlayerProjection> players = incoming.players() != null
-                ? incoming.players()
-                : projection.getData().players();
+        List<PlayerProjection> stored = projection.getData().players();
+        if (wouldEmptyStoredRows(incoming.players(), stored)) {
+            throw new DestructiveUpdateException(
+                    "Refusing to empty the %d player rows of projection %s".formatted(stored.size(), id));
+        }
+        List<PlayerProjection> players = incoming.players() != null ? incoming.players() : stored;
         projection.update(name, new ProjectionData(incoming.settings(), players, incoming.draft()));
         return userProjectionRepository.save(projection);
+    }
+
+    private static boolean wouldEmptyStoredRows(
+            List<PlayerProjection> incoming, List<PlayerProjection> stored) {
+        return incoming != null && incoming.isEmpty() && stored != null && !stored.isEmpty();
     }
 
     @Transactional

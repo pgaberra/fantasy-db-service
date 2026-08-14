@@ -145,7 +145,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProjectionResponse"
         "400":
-          description: Validation failed (blank name/data or too large)
+          description: "Validation failed (blank name/data or too large), or the update\
+            \ would empty a projection that has player rows"
           content:
             '*/*':
               schema:

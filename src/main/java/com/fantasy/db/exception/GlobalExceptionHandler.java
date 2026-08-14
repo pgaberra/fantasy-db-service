@@ -39,6 +39,15 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, message);
     }
 
+    // The deliberate exception to the rule above: a request that would destroy stored data is a
+    // 4xx because the caller must fix it, but it means a client is misbehaving rather than a user
+    // doing something ordinary, so it is logged and alerted on like a fault.
+    @ExceptionHandler(DestructiveUpdateException.class)
+    public ResponseEntity<ErrorDto> handleDestructiveUpdate(DestructiveUpdateException e) {
+        log.error("Rejected a destructive update", e);
+        return build(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorDto> handleUnexpected(Exception e) {
         log.error("Unhandled exception", e);

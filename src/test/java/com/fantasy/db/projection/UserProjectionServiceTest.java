@@ -1,5 +1,6 @@
 package com.fantasy.db.projection;
 
+import com.fantasy.db.exception.DestructiveUpdateException;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.ProjectionData;
@@ -136,9 +137,24 @@ class UserProjectionServiceTest {
         assertThat(updated.getData().players()).isEqualTo(sampleData().players());
     }
 
+    /**
+     * The inverse of what this used to assert. An explicit empty list was read as "remove the
+     * rows"; a client reached that state by accident and 1589 rows were lost, so the request is
+     * now refused rather than honoured.
+     */
     @Test
-    void emptyPlayersClearsThemRatherThanBeingTreatedAsOmitted() {
+    void refusesToEmptyTheStoredPlayerRows() {
         UserProjection created = userProjectionService.create(userId, "Old", sampleData());
+
+        assertThatThrownBy(() -> userProjectionService.update(userId, created.getId(), "New",
+                new UpdateProjectionData(sampleData().settings(), List.of(), null)))
+                .isInstanceOf(DestructiveUpdateException.class);
+    }
+
+    @Test
+    void allowsEmptyPlayersWhenNoneAreStored() {
+        UserProjection created = userProjectionService.create(
+                userId, "Old", new ProjectionData(sampleData().settings(), List.of(), null));
 
         UserProjection updated = userProjectionService.update(userId, created.getId(), "New",
                 new UpdateProjectionData(sampleData().settings(), List.of(), null));

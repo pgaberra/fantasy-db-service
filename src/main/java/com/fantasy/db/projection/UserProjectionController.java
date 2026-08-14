@@ -73,7 +73,8 @@ public class UserProjectionController {
     @Operation(summary = "Update an existing projection")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Projection updated"),
-        @ApiResponse(responseCode = "400", description = "Validation failed (blank name/data or too large)"),
+        @ApiResponse(responseCode = "400", description = "Validation failed (blank name/data or too "
+                + "large), or the update would empty a projection that has player rows"),
         @ApiResponse(responseCode = "404", description = "No such projection for this user"),
         @ApiResponse(responseCode = "409", description = "The user already has another projection with that name")
     })
