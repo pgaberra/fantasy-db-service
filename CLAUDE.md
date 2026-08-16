@@ -69,8 +69,13 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
   - `ProjectionData` — typed DTO: `settings` (`ProjectionSettings`) + `players`
     (`List<PlayerProjection>`). Per-player stats are validated **maps** (`stat → value`)
     keyed by the known stat vocabulary, so adding a stat needs no db-service change.
-  - `Season` / `ScoringType` / `PlayerType` / `ProjectionKind` — enums with `@JsonValue`
-    codes (`20262027`, `points`, `skater`, `preset_draft`).
+    `ProjectionSettings` also carries two fields this service only stores: `playerBasis`
+    (what the rows started from — last season's stat line or zeros) and
+    `playerPoolSyncedAt` (the sync run they were last squared with). The player pool
+    changes under a saved projection all season, and the BFF is the one that can see it,
+    so it reconciles the rows and writes both fields back; here they are just jsonb.
+  - `Season` / `ScoringType` / `PlayerType` / `ProjectionKind` / `PlayerBasis` — enums with
+    `@JsonValue` codes (`20262027`, `points`, `skater`, `preset_draft`, `last_season`).
   - `UserProjectionRepository` / `UserProjectionService` — CRUD scoped to the owning
     user (`findByIdAndUserId` enforces ownership; the unique constraint yields 409).
   - `UserProjectionController` — `/api/v1/users/{userId}/projections` (list/get/create/

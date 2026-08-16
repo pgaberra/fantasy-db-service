@@ -1,5 +1,6 @@
 package com.fantasy.db.share;
 
+import com.fantasy.db.projection.PlayerBasis;
 import com.fantasy.db.projection.PlayerType;
 import com.fantasy.db.projection.ProjectionKind;
 import com.fantasy.db.projection.ScoringType;
@@ -68,7 +69,9 @@ class ProjectionShareServiceTest {
                 null,
                 null,
                 new YahooSync("Alexander's Beer League", "453.l.12345", Instant.parse("2026-08-01T10:00:00Z")),
-                new EspnSync("Alexander's ESPN League", "123456", Instant.parse("2026-08-01T10:00:00Z")));
+                new EspnSync("Alexander's ESPN League", "123456", Instant.parse("2026-08-01T10:00:00Z")),
+                PlayerBasis.LAST_SEASON,
+                Instant.parse("2026-08-16T04:00:00Z"));
         PlayerProjection mcDavid = new PlayerProjection(
                 1, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)));
         return new ProjectionData(settings, List.of(mcDavid), null);
@@ -117,6 +120,8 @@ class ProjectionShareServiceTest {
         // Neither platform's league details belong on a page anyone with the link can open.
         assertThat(share.getData().settings().yahooSync()).isNull();
         assertThat(share.getData().settings().espnSync()).isNull();
+        assertThat(share.getData().settings().playerBasis()).isNull();
+        assertThat(share.getData().settings().playerPoolSyncedAt()).isNull();
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.fantasy.db.projection.dto;
 
+import com.fantasy.db.projection.PlayerBasis;
 import com.fantasy.db.projection.ScoringType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -7,6 +8,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -27,5 +29,9 @@ public record ProjectionSettings(
         @Schema(description = "Where these settings were last synced from — the Yahoo league name/key and the timestamp. Absent if the projection was never synced from a Yahoo league.")
         @Valid YahooSync yahooSync,
         @Schema(description = "Where these settings were last synced from — the ESPN league name/id and the timestamp. Absent if the projection was never synced from an ESPN league.")
-        @Valid EspnSync espnSync
+        @Valid EspnSync espnSync,
+        @Schema(description = "What the player rows started from, and so what a player who joins the pool later is seeded with: last season's stat line, or zeros. Absent on projections saved before this was recorded.")
+        PlayerBasis playerBasis,
+        @Schema(description = "When the player rows were last reconciled against the player pool — the finish time of the sync run they were reconciled against. Absent until the rows have been reconciled once.")
+        Instant playerPoolSyncedAt
 ) {}
