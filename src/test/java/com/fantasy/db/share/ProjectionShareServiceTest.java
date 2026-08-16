@@ -70,6 +70,7 @@ class ProjectionShareServiceTest {
                 null,
                 new YahooSync("Alexander's Beer League", "453.l.12345", Instant.parse("2026-08-01T10:00:00Z")),
                 new EspnSync("Alexander's ESPN League", "123456", Instant.parse("2026-08-01T10:00:00Z")),
+                "123456",
                 PlayerBasis.LAST_SEASON,
                 Instant.parse("2026-08-16T04:00:00Z"));
         PlayerProjection mcDavid = new PlayerProjection(
@@ -120,6 +121,8 @@ class ProjectionShareServiceTest {
         // Neither platform's league details belong on a page anyone with the link can open.
         assertThat(share.getData().settings().yahooSync()).isNull();
         assertThat(share.getData().settings().espnSync()).isNull();
+        // The remembered id outlives the sync on the owner's copy — it must not outlive it here.
+        assertThat(share.getData().settings().lastEspnLeagueId()).isNull();
         assertThat(share.getData().settings().playerBasis()).isNull();
         assertThat(share.getData().settings().playerPoolSyncedAt()).isNull();
     }

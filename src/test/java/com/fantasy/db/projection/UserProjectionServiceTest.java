@@ -46,6 +46,7 @@ class UserProjectionServiceTest {
                 null,
                 null,
                 null,
+                null,
                 PlayerBasis.LAST_SEASON,
                 Instant.parse("2026-08-16T04:00:00Z"));
         PlayerProjection mcDavid = new PlayerProjection(
