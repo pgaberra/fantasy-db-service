@@ -11,6 +11,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -44,7 +45,9 @@ class UserProjectionServiceTest {
                 null,
                 null,
                 null,
-                null);
+                null,
+                PlayerBasis.LAST_SEASON,
+                Instant.parse("2026-08-16T04:00:00Z"));
         PlayerProjection mcDavid = new PlayerProjection(
                 1, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)));
         return new ProjectionData(settings, List.of(mcDavid), null);
@@ -67,6 +70,21 @@ class UserProjectionServiceTest {
         assertThat(found.getData().players()).hasSize(1);
         assertThat(found.getData().settings().scoringType()).isEqualTo(ScoringType.POINTS);
         assertThat(userProjectionService.findAll(userId)).hasSize(1);
+    }
+
+    /**
+     * What the rows started from, and when they were last squared with the player pool, has to
+     * survive the jsonb round-trip: it is the only thing that says what a player who joins the
+     * pool later should be seeded with.
+     */
+    @Test
+    void keepsThePlayerBasisAndPoolStamp() {
+        UserProjection created = create("Based");
+
+        ProjectionSettings stored = userProjectionService.findById(userId, created.getId())
+                .getData().settings();
+        assertThat(stored.playerBasis()).isEqualTo(PlayerBasis.LAST_SEASON);
+        assertThat(stored.playerPoolSyncedAt()).isEqualTo(Instant.parse("2026-08-16T04:00:00Z"));
     }
 
     @Test

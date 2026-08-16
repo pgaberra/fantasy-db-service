@@ -82,7 +82,9 @@ public class ProjectionShareService {
     /**
      * Strips the league sync details before the settings go on a public page — they carry the
      * owner's league name and its id on Yahoo or ESPN, which is about their private league rather
-     * than the projection anyone with the link came to look at.
+     * than the projection anyone with the link came to look at. The player basis and pool stamp go
+     * with them: a share is a frozen snapshot, so how its rows would be kept in step with the
+     * player pool no longer says anything.
      */
     private ProjectionSettings publishable(ProjectionSettings settings) {
         return new ProjectionSettings(
@@ -96,6 +98,8 @@ public class ProjectionShareService {
                 settings.leagueSize(),
                 settings.rosterSlots(),
                 settings.minGoalieGames(),
+                null,
+                null,
                 null,
                 null);
     }
