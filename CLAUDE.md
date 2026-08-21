@@ -1,9 +1,8 @@
 # CLAUDE.md — fantasy-db-service
 
 Persistence microservice for the fantasy hockey tool. Owns the database and
-exposes a small REST API for the BFF (`fantasy-bff`) to manage data. v1 scope:
-**users only** (create user, look up by email, existence check). Projections and
-other entities will come later.
+exposes a REST API for the BFF (`fantasy-bff`) to manage data: **users**, their
+saved **projections**, and the public **shares** published from those projections.
 
 > This service is **internal-only**: deployed on Coolify with no public domain, and every
 > `/api/**` request requires the shared `X-Internal-Api-Key` header (`INTERNAL_API_KEY`;
@@ -133,20 +132,11 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
 - Never return raw entities with secrets to callers without thinking about
   exposure (see the security note above).
 
-### Logging & error handling
+### Error handling
 
-**Never silence an error.** Every `@RestControllerAdvice` must have a catch-all
-`@ExceptionHandler(Exception.class)` that **logs the full stack trace** (`log.error`)
-and returns a consistent `ErrorDto` — an unmatched exception must never surface as an
-opaque 500 with no server-side trace (this once made a downstream failure undiagnosable
-in the BFF). Rules of thumb:
-
-- **5xx / genuine faults** (unexpected exceptions, upstream/downstream call failures):
-  log at `ERROR` with the exception so the stack trace is captured.
-- **4xx / expected client outcomes** (not-found, conflict, validation): do **not** log
-  as errors — they are normal and would just be noise.
-- **Async / background work** (e.g. jobs on a virtual thread) does **not** reach the
-  advice — it must `try/catch` and log its own failures at the job boundary.
+The monorepo-wide rule (never silence an error; `ERROR` for 5xx, quiet for 4xx) lives in
+the root `CLAUDE.md`. Specific here: built-in exceptions only, mapped as listed under
+`exception/` above.
 
 ### OpenAPI annotations
 
@@ -186,17 +176,14 @@ The spec is LF-normalised (`.gitattributes`) so it diffs cleanly across OSes.
 
 ## Monorepo conventions
 
-Shared across all four repos (`fantasy-web` → `fantasy-bff` → `fantasy-db-service` +
-`fantasy-nhl-service`). The web talks only to the BFF; inter-service calls to db/nhl use a
-shared `X-Internal-Api-Key` header.
-
-### Input validation
-
-**Every service validates its own inbound data independently** — never trust that an
-upstream caller (e.g. the BFF) validated correctly. Reject malformed input at the
-boundary with Bean Validation (`@Valid` on the controller param + `@NotBlank` / `@Email`
-/ `@Size` / … on the DTO). **Every user-supplied string gets a `@Size(max=…)`** so an
-oversized payload is rejected rather than processed or stored.
+The full set lives in the monorepo root `CLAUDE.md`: input validation at every boundary,
+logging & error handling, secrets only from env, one worktree per agent, and the merge
+procedure. In short — the web talks only to the BFF; inter-service calls carry a shared
+`X-Internal-Api-Key` header. Branch → push → PR → checks pass → **squash merge** to `master`
+(the PR title becomes the commit message; make it a proper `feat:`/`fix:` message and merge
+with an explicit `--subject`). No attribution trailers. Secrets only from env, never
+committed — the local-dev DB password lives only in `docker-compose.yml`. Never merge a PR
+titled "wip"/"draft".
 
 ### Data hygiene (pre-launch)
 
@@ -213,32 +200,3 @@ longer be casually deleted and backward-compatible reads become legitimate.
 Example: the draft-jsonb `by`-field incident was first patched with
 `@JsonIgnoreProperties(ignoreUnknown = true)` (#43), then reverted in favour of
 a migration that deletes the legacy drafts (#46).
-
-### Secrets
-
-**Never commit a password, API key, token, or any secret to git — in any environment**,
-not even throwaway local-dev credentials, so the habit is absolute and we never risk
-leaking (or reusing) a real one. Secrets come only from environment variables
-(`${DB_PASSWORD}`, `${INTERNAL_API_KEY}`, …) — no literal value and **no default** in
-`application*.yaml`; a missing var should fail fast, not fall back to a baked-in value.
-Non-secret connection details (host, port, db name, username) may be committed. The
-local-dev password lives only in `docker-compose.yml` (which defines the local DB). Run a
-service against a chosen DB with the `local` / `staging` Spring profiles:
-`SPRING_PROFILES_ACTIVE=<profile> DB_PASSWORD=… ./gradlew bootRun`.
-
-### Merging PRs
-
-Branch → push → PR → checks pass → **squash merge** to `master`. GitHub squash uses the
-**PR title** as the commit message, so make it a proper message (`feat: …`, `fix: …`), then
-merge with an explicit subject:
-```
-gh pr merge <n> --squash --delete-branch \
-  --subject "feat: describe the change (#<n>)" \
-  --body "Optional longer description."
-```
-Never merge a PR titled "wip"/"draft".
-
-### Commit messages
-
-No attribution trailers (`attribution.commit` / `attribution.pr` are `""` in
-`~/.claude/settings.json`, enforced at the tool level).
