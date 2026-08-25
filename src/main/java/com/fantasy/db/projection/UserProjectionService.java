@@ -39,11 +39,11 @@ public class UserProjectionService {
 
     @Transactional
     public UserProjection create(UUID userId, String name, ProjectionKind kind, ProjectionData data) {
-        // Each user may keep at most one projection of each kind: one they made themselves, and
-        // one holding a draft started from a preset. Reject a second one with a conflict
-        // (DataIntegrityViolationException -> 409, see GlobalExceptionHandler). The season is
-        // stamped from config, not supplied by the caller.
-        if (userProjectionRepository.existsByUserIdAndKind(userId, kind)) {
+        // Each user may keep at most one projection of the kinds that are a single thing: one
+        // they made themselves, and one holding a draft started from a preset. Reject a second
+        // one with a conflict (DataIntegrityViolationException -> 409, see
+        // GlobalExceptionHandler). The season is stamped from config, not supplied by the caller.
+        if (kind.isUniquePerUser() && userProjectionRepository.existsByUserIdAndKind(userId, kind)) {
             throw new DataIntegrityViolationException(
                     "User already has a projection of kind " + kind.getCode());
         }

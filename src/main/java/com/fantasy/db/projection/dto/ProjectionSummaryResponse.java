@@ -15,7 +15,9 @@ public record ProjectionSummaryResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Season season,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant createdAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant updatedAt,
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) DraftStatus draftStatus
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) DraftStatus draftStatus,
+        @Schema(description = "Who the board was copied from, on an imported projection. Absent on the user's own.")
+        ProjectionOrigin origin
 ) {
     public static ProjectionSummaryResponse from(UserProjection projection) {
         return new ProjectionSummaryResponse(
@@ -25,7 +27,8 @@ public record ProjectionSummaryResponse(
                 projection.getSeason(),
                 projection.getCreatedAt(),
                 projection.getUpdatedAt(),
-                draftStatusOf(projection.getData()));
+                draftStatusOf(projection.getData()),
+                ProjectionOrigin.from(projection));
     }
 
     private static DraftStatus draftStatusOf(ProjectionData data) {

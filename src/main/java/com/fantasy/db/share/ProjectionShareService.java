@@ -5,6 +5,7 @@ import com.fantasy.db.projection.UserProjectionRepository;
 import com.fantasy.db.user.User;
 import com.fantasy.db.user.UserRepository;
 import com.fantasy.db.projection.dto.ProjectionSettings;
+import com.fantasy.db.share.dto.SharedBoard;
 import com.fantasy.db.share.dto.SharedPlayer;
 import com.fantasy.db.share.dto.SharedProjectionData;
 import org.springframework.stereotype.Service;
@@ -51,10 +52,11 @@ public class ProjectionShareService {
                 .orElseThrow(() -> new NoSuchElementException("No projection found with id: " + projectionId));
         SharedProjectionData data =
                 new SharedProjectionData(publishable(projection.getData().settings()), players);
+        SharedBoard board = new SharedBoard(projection.getData().players());
 
         return projectionShareRepository.findByProjectionIdAndUserId(projectionId, userId)
                 .orElseGet(() -> projectionShareRepository.save(ProjectionShare.create(
-                        projectionId, userId, projection.getName(), projection.getSeason(), data)));
+                        projectionId, userId, projection.getName(), projection.getSeason(), data, board)));
     }
 
     @Transactional(readOnly = true)

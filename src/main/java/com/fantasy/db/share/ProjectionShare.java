@@ -1,6 +1,7 @@
 package com.fantasy.db.share;
 
 import com.fantasy.db.projection.Season;
+import com.fantasy.db.share.dto.SharedBoard;
 import com.fantasy.db.share.dto.SharedProjectionData;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -55,6 +56,10 @@ public class ProjectionShare {
     @Column(nullable = false)
     private SharedProjectionData data;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(nullable = false, updatable = false)
+    private SharedBoard board;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -66,7 +71,7 @@ public class ProjectionShare {
     }
 
     public ProjectionShare(UUID id, UUID projectionId, UUID userId, String token,
-                           String name, Season season, SharedProjectionData data,
+                           String name, Season season, SharedProjectionData data, SharedBoard board,
                            Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.projectionId = projectionId;
@@ -75,15 +80,16 @@ public class ProjectionShare {
         this.name = name;
         this.season = season.getCode();
         this.data = data;
+        this.board = board;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
 
     public static ProjectionShare create(UUID projectionId, UUID userId, String name,
-                                         Season season, SharedProjectionData data) {
+                                         Season season, SharedProjectionData data, SharedBoard board) {
         Instant now = Instant.now();
         return new ProjectionShare(UUID.randomUUID(), projectionId, userId, generateToken(),
-                name, season, data, now, now);
+                name, season, data, board, now, now);
     }
 
 
@@ -119,6 +125,10 @@ public class ProjectionShare {
 
     public SharedProjectionData getData() {
         return data;
+    }
+
+    public SharedBoard getBoard() {
+        return board;
     }
 
     public Instant getCreatedAt() {

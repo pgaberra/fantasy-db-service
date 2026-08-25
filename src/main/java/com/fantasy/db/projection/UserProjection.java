@@ -45,6 +45,12 @@ public class UserProjection {
     @Column(nullable = false)
     private ProjectionData data;
 
+    @Column(name = "origin_share_token", updatable = false, length = 64)
+    private String originShareToken;
+
+    @Column(name = "origin_author_username", updatable = false, length = 20)
+    private String originAuthorUsername;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -56,13 +62,16 @@ public class UserProjection {
     }
 
     public UserProjection(UUID id, UUID userId, String name, ProjectionKind kind, Season season,
-                          ProjectionData data, Instant createdAt, Instant updatedAt) {
+                          ProjectionData data, String originShareToken, String originAuthorUsername,
+                          Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.userId = userId;
         this.name = name;
         this.kind = kind;
         this.season = season.getCode();
         this.data = data;
+        this.originShareToken = originShareToken;
+        this.originAuthorUsername = originAuthorUsername;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -70,7 +79,14 @@ public class UserProjection {
     public static UserProjection create(UUID userId, String name, ProjectionKind kind, Season season,
                                         ProjectionData data) {
         Instant now = Instant.now();
-        return new UserProjection(UUID.randomUUID(), userId, name, kind, season, data, now, now);
+        return new UserProjection(UUID.randomUUID(), userId, name, kind, season, data, null, null, now, now);
+    }
+
+    public static UserProjection importedFrom(UUID userId, String name, Season season, ProjectionData data,
+                                              String shareToken, String authorUsername) {
+        Instant now = Instant.now();
+        return new UserProjection(UUID.randomUUID(), userId, name, ProjectionKind.IMPORTED, season, data,
+                shareToken, authorUsername, now, now);
     }
 
     public void update(String name, ProjectionData data) {
@@ -101,6 +117,14 @@ public class UserProjection {
 
     public ProjectionData getData() {
         return data;
+    }
+
+    public String getOriginShareToken() {
+        return originShareToken;
+    }
+
+    public String getOriginAuthorUsername() {
+        return originAuthorUsername;
     }
 
     public Instant getCreatedAt() {

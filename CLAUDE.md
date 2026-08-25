@@ -61,10 +61,16 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     `CreateProjectionRequest`); stored as the 8-digit code, exposed as the `Season` enum.
     `kind` (`ProjectionKind`) separates the projection a user makes and edits
     (`PROJECTION`) from the one that only exists to hold a draft started from a preset
-    such as last season's stats (`PRESET_DRAFT`) — a user may keep **one of each**, and
-    only the former is their own work to list. Callers that show "my projections" filter
+    such as last season's stats (`PRESET_DRAFT`), and from a board copied out of someone
+    else's share link (`IMPORTED`) — a user may keep **one of each of the first two**, and
+    only `PROJECTION` is their own work to list. Callers that show "my projections" filter
     on it; the service stores whichever kind the request asks for (defaulting to
-    `PROJECTION`) and rejects a second of the same kind with a 409.
+    `PROJECTION`) and rejects a second of a kind that `isUniquePerUser()` with a 409.
+    `IMPORTED` is deliberately not one of those: drafting against two friends' boards is a
+    normal thing to want, so only the unique `(user_id, kind, name)` constraint limits it.
+    An imported row is stamped with `origin_share_token` and `origin_author_username`
+    (surfaced as `ProjectionOrigin` on both responses), snapshotted at import time so the
+    credit survives the share going away.
   - `ProjectionData` — typed DTO: `settings` (`ProjectionSettings`) + `players`
     (`List<PlayerProjection>`). Per-player stats are validated **maps** (`stat → value`)
     keyed by the known stat vocabulary, so adding a stat needs no db-service change.
@@ -83,10 +89,14 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     `ProjectionSummaryResponse`, plus the `ProjectionData` model records.
 - `share/` — feature package (a projection published under a public link):
   - `ProjectionShare` — JPA `@Entity` (UUID id, unique `projection_id`, `user_id`, unique
-    `token`, `author_alias`, `name`, `season`, `data`, `view_count`, timestamps). `data` is a
+    `token`, `name`, `season`, `data`, `board`, timestamps). `data` is a
     **snapshot** (`SharedProjectionData` in a `jsonb` column): the settings and the ranked rows
     as they were when shared, so a link posted publicly keeps showing what was shared rather
-    than whatever the owner edited afterwards.
+    than whatever the owner edited afterwards. `board` (`SharedBoard`, a second `jsonb`
+    column) is every player row the projection had at share time — what an import copies. It
+    is kept out of `data` so the public endpoint never serialises ~0.5 MB to a visitor who came
+    to read a top list, and it is filled server-side from the stored projection rather than
+    uploaded, since that request size was already failing in production once.
   - The `token` is 16 random bytes from `SecureRandom`, base64url-encoded, not the projection's
     UUID. Publishing is **once and final**: sharing an already-shared projection returns the
     share it has, untouched, and there is no endpoint to refresh or withdraw one. Deleting the
@@ -97,6 +107,12 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     league name and key have no business on a public page. The ranked rows come from the caller,
     which owns the ranking, and carry denormalised identity (name, team, positions) so the public
     page renders without the player read model.
+  - `ProjectionImportService` / `ProjectionImportController` —
+    `POST /api/v1/users/{userId}/projections/imports`, which copies a share into the caller's
+    own projections by its token. Anyone holding a token may import; the copy is of the frozen
+    snapshot rather than the live projection behind it, because that snapshot is what the owner
+    consented to publish. It carries no draft (the author's picks were theirs) and takes its
+    season from the share, since the rows are that season's numbers.
   - `ProjectionShareController` — `/api/v1/users/{userId}/projections/{projectionId}/share`
     (get/put/delete, ownership-scoped). `SharedProjectionController` —
     `GET /api/v1/shares/{token}`, the snapshot the BFF serves publicly; it returns no owner
