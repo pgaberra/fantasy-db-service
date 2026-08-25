@@ -1,5 +1,6 @@
 package com.fantasy.db.share;
 
+import com.fantasy.db.projection.PlayerIdSpace;
 import com.fantasy.db.projection.Season;
 import com.fantasy.db.share.dto.SharedProjectionData;
 import jakarta.persistence.Column;
@@ -54,6 +55,12 @@ public class ProjectionShare {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false)
     private SharedProjectionData data;
+
+    // Which platform's player ids the rows in `data` are keyed by. A share is otherwise frozen;
+    // this is the one thing that may still be rewritten, because an id that no longer resolves
+    // is not the picture that was shared either.
+    @Column(name = "player_id_space", nullable = false, length = 8)
+    private String playerIdSpace = PlayerIdSpace.YAHOO.getCode();
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -119,6 +126,17 @@ public class ProjectionShare {
 
     public SharedProjectionData getData() {
         return data;
+    }
+
+    public PlayerIdSpace getPlayerIdSpace() {
+        return PlayerIdSpace.fromCode(playerIdSpace);
+    }
+
+    /** Replaces the snapshot's rows and records which platform's ids they are now keyed by. */
+    public void remapPlayerIds(SharedProjectionData remapped, PlayerIdSpace space) {
+        this.data = remapped;
+        this.playerIdSpace = space.getCode();
+        this.updatedAt = Instant.now();
     }
 
     public Instant getCreatedAt() {

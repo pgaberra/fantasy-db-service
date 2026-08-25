@@ -104,8 +104,21 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     rename follows onto links already shared. It deliberately counts nothing: the share is fetched once for a
     chat client's link preview and again for its card, so a per-read counter measured crawlers
     rather than people (V13 dropped the column).
+- `playerid/` — a one-off: rewriting stored player ids from one platform's numbering to
+  another's. Yahoo stopped serving its player collection, ESPN provides the pool now, and the
+  same people are numbered differently on the two.
+  - `PlayerIdRemapService` — applies a crosswalk (old id → new id, computed by the BFF, which
+    is the only place that can see both pools) to every projection and share still marked
+    `player_id_space = 'yahoo'`, and stamps them `espn`. **Dry run by default**: an unqualified
+    call reports and writes nothing. An id the crosswalk does not cover is **left as it is**,
+    never dropped — a row the app cannot draw is invisible and recoverable, a deleted row is a
+    user's work gone. The marker is what makes a second run safe: the two id spaces overlap in
+    range, so re-running over an already-remapped row could translate an id that was never
+    Yahoo's.
+  - `PlayerIdRemapController` — `POST /api/v1/admin/player-ids/remap`.
 - `exception/` — `ErrorDto`, `GlobalExceptionHandler`. The whole service uses **built-in**
   exceptions rather than custom ones (`NoSuchElementException` → 404,
+  `IllegalArgumentException` → 400, `IllegalStateException` → 409,
   `DataIntegrityViolationException` → 409, `MethodArgumentNotValidException` → 400).
 
 ## Database & config
