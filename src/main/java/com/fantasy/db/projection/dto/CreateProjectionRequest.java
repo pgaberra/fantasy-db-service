@@ -1,5 +1,6 @@
 package com.fantasy.db.projection.dto;
 
+import com.fantasy.db.projection.PlayerIdSpace;
 import com.fantasy.db.projection.ProjectionKind;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -11,7 +12,12 @@ public record CreateProjectionRequest(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @NotBlank @Size(max = 100) String name,
         @Schema(description = "What the projection is for. Defaults to the user's own.")
         ProjectionKind kind,
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @NotNull @Valid ProjectionData data
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @NotNull @Valid ProjectionData data,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Which platform's player ids the rows are keyed by. Required rather "
+                        + "than defaulted: a wrong value here is silent until a remap translates "
+                        + "ids that were never in the space it assumed.")
+        @NotNull PlayerIdSpace playerIdSpace
 ) {
     public ProjectionKind kindOrDefault() {
         return kind == null ? ProjectionKind.PROJECTION : kind;

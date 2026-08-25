@@ -102,7 +102,7 @@ class ProjectionImportServiceTest {
         author.updateUsername(handle);
         UUID authorId = userRepository.save(author).getId();
         UserProjection projection = userProjectionService.create(
-                authorId, name, ProjectionKind.PROJECTION, projectionData());
+                authorId, name, ProjectionKind.PROJECTION, projectionData(), PlayerIdSpace.YAHOO);
         return projectionShareService.share(authorId, projection.getId(), teaserRows()).getToken();
     }
 
@@ -182,7 +182,7 @@ class ProjectionImportServiceTest {
     @Test
     void leavesTheImportersOwnProjectionAlone() {
         UserProjection own = userProjectionService.create(
-                readerId, "Mine", ProjectionKind.PROJECTION, projectionData());
+                readerId, "Mine", ProjectionKind.PROJECTION, projectionData(), PlayerIdSpace.YAHOO);
 
         projectionImportService.importFrom(readerId, share("My league"), null);
 

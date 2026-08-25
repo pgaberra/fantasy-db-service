@@ -27,6 +27,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -52,6 +53,7 @@ class UserProjectionControllerTest {
     private static final String VALID_BODY = """
             {
               "name": "My league",
+              "playerIdSpace": "espn",
               "data": {
                 "settings": {
                   "scoringType": "points",
@@ -73,6 +75,7 @@ class UserProjectionControllerTest {
     private static final String BODY_WITHOUT_PLAYERS = """
             {
               "name": "My league",
+              "playerIdSpace": "espn",
               "data": {
                 "settings": {
                   "scoringType": "points",
@@ -172,7 +175,7 @@ class UserProjectionControllerTest {
 
     @Test
     void createReturns201() throws Exception {
-        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PROJECTION), any()))
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PROJECTION), any(), any()))
                 .thenReturn(projection("My league"));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
@@ -185,7 +188,7 @@ class UserProjectionControllerTest {
 
     @Test
     void createStoresTheRequestedKind() throws Exception {
-        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any()))
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any(), any()))
                 .thenReturn(projection("My league", null, ProjectionKind.PRESET_DRAFT));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
@@ -196,7 +199,7 @@ class UserProjectionControllerTest {
                 .andExpect(jsonPath("$.kind").value("preset_draft"));
 
         verify(userProjectionService)
-                .create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any());
+                .create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any(), any());
     }
 
     @Test
@@ -209,7 +212,7 @@ class UserProjectionControllerTest {
 
     @Test
     void createReturns409WhenUserAlreadyHasProjection() throws Exception {
-        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PROJECTION), any()))
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PROJECTION), any(), any()))
                 .thenThrow(new DataIntegrityViolationException("User already has a projection"));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
@@ -256,5 +259,35 @@ class UserProjectionControllerTest {
     void deleteReturns204() throws Exception {
         mockMvc.perform(delete("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID))
                 .andExpect(status().isNoContent());
+    }
+
+    /**
+     * The space is the caller's to state, not ours to assume: the rows are keyed by whichever
+     * platform's pool filled them, and a projection stamped with the wrong one is only found out
+     * when a remap translates ids that were never in the space it assumed.
+     */
+    @Test
+    void forwardsThePlayerIdSpaceTheCallerStated() throws Exception {
+        when(userProjectionService.create(eq(USER_ID), eq("My league"),
+                eq(ProjectionKind.PROJECTION), any(), any()))
+                .thenReturn(projection("My league"));
+
+        mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isCreated());
+
+        verify(userProjectionService).create(eq(USER_ID), eq("My league"),
+                eq(ProjectionKind.PROJECTION), any(), eq(PlayerIdSpace.ESPN));
+    }
+
+    @Test
+    void rejectsACreateThatDoesNotSayWhichIdSpaceTheRowsAreIn() throws Exception {
+        mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY.replace("\"playerIdSpace\": \"espn\",", "")))
+                .andExpect(status().isBadRequest());
+
+        verify(userProjectionService, never()).create(any(), any(), any(), any(), any());
     }
 }

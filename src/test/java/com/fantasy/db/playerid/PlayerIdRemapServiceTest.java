@@ -80,7 +80,8 @@ class PlayerIdRemapServiceTest {
         }
         return projectionRepository.save(UserProjection.create(
                 UUID.randomUUID(), "League " + UUID.randomUUID(), ProjectionKind.PROJECTION,
-                Season.fromCode("20262027"), new ProjectionData(settings(), players, draft)));
+                Season.fromCode("20262027"), new ProjectionData(settings(), players, draft),
+                PlayerIdSpace.YAHOO));
     }
 
     private static DraftState draftWith(int... playerIds) {

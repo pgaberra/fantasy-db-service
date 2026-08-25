@@ -1,6 +1,7 @@
 package com.fantasy.db.share;
 
 import com.fantasy.db.projection.PlayerBasis;
+import com.fantasy.db.projection.PlayerIdSpace;
 import com.fantasy.db.projection.PlayerType;
 import com.fantasy.db.projection.ProjectionKind;
 import com.fantasy.db.projection.ScoringType;
@@ -92,7 +93,8 @@ class ProjectionShareServiceTest {
     }
 
     private UserProjection projection() {
-        return userProjectionService.create(userId, "My league", ProjectionKind.PROJECTION, projectionData());
+        return userProjectionService.create(
+                userId, "My league", ProjectionKind.PROJECTION, projectionData(), PlayerIdSpace.YAHOO);
     }
 
     @Test
@@ -157,7 +159,7 @@ class ProjectionShareServiceTest {
     void refusesToShareUntilTheAccountHasAUsername() {
         User nameless = userRepository.save(User.create("nameless@example.com", "hash"));
         UserProjection projection = userProjectionService.create(
-                nameless.getId(), "Their league", ProjectionKind.PROJECTION, projectionData());
+                nameless.getId(), "Their league", ProjectionKind.PROJECTION, projectionData(), PlayerIdSpace.YAHOO);
 
         assertThatThrownBy(() -> projectionShareService.share(
                 nameless.getId(), projection.getId(), sharedPlayers("Connor McDavid")))
