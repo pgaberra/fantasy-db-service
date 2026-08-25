@@ -14,7 +14,9 @@ public record ProjectionResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Season season,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ProjectionData data,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant createdAt,
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant updatedAt
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant updatedAt,
+        @Schema(description = "Who the board was copied from, on an imported projection. Absent on the user's own.")
+        ProjectionOrigin origin
 ) {
     public static ProjectionResponse from(UserProjection projection) {
         return new ProjectionResponse(
@@ -24,6 +26,7 @@ public record ProjectionResponse(
                 projection.getSeason(),
                 projection.getData(),
                 projection.getCreatedAt(),
-                projection.getUpdatedAt());
+                projection.getUpdatedAt(),
+                ProjectionOrigin.from(projection));
     }
 }

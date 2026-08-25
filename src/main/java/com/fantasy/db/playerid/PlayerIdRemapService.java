@@ -13,6 +13,7 @@ import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.share.ProjectionShare;
 import com.fantasy.db.share.ProjectionShareRepository;
+import com.fantasy.db.share.dto.SharedBoard;
 import com.fantasy.db.share.dto.SharedPlayer;
 import com.fantasy.db.share.dto.SharedProjectionData;
 import org.slf4j.Logger;
@@ -74,8 +75,9 @@ public class PlayerIdRemapService {
                 shareRepository.findAllByPlayerIdSpace(PlayerIdSpace.YAHOO.getCode());
         for (ProjectionShare share : shares) {
             SharedProjectionData remapped = remap(share.getData(), crosswalk, tally);
+            SharedBoard remappedBoard = remap(share.getBoard(), crosswalk, tally);
             if (!dryRun) {
-                share.remapPlayerIds(remapped, PlayerIdSpace.ESPN);
+                share.remapPlayerIds(remapped, remappedBoard, PlayerIdSpace.ESPN);
             }
         }
 
@@ -86,6 +88,7 @@ public class PlayerIdRemapService {
                 new RemapCounts(tally.draftPicksRemapped, tally.draftPicksUnmapped),
                 shares.size(),
                 new RemapCounts(tally.sharedRowsRemapped, tally.sharedRowsUnmapped),
+                new RemapCounts(tally.sharedBoardRowsRemapped, tally.sharedBoardRowsUnmapped),
                 tally.unmappedSample());
         log.info("Player id remap ({}): {} projections, {} shares; {} player rows and {} draft "
                         + "picks remapped, {} rows left on an id the crosswalk did not cover",
@@ -150,6 +153,18 @@ public class PlayerIdRemapService {
         return new SharedProjectionData(data.settings(), players);
     }
 
+    private SharedBoard remap(SharedBoard board, Map<Integer, Integer> crosswalk, Tally tally) {
+        List<PlayerProjection> players = new ArrayList<>(board.players().size());
+        for (PlayerProjection player : board.players()) {
+            Integer mapped = crosswalk.get(player.playerId());
+            tally.sharedBoardRow(mapped != null, player.playerId());
+            players.add(mapped == null
+                    ? player
+                    : new PlayerProjection(mapped, player.type(), player.stats()));
+        }
+        return new SharedBoard(players);
+    }
+
     private static final class Tally {
 
         private int playerRowsRemapped;
@@ -158,6 +173,8 @@ public class PlayerIdRemapService {
         private int draftPicksUnmapped;
         private int sharedRowsRemapped;
         private int sharedRowsUnmapped;
+        private int sharedBoardRowsRemapped;
+        private int sharedBoardRowsUnmapped;
         private final TreeSet<Integer> unmapped = new TreeSet<>();
 
         void player(boolean mapped, int playerId) {
@@ -183,6 +200,15 @@ public class PlayerIdRemapService {
                 sharedRowsRemapped++;
             } else {
                 sharedRowsUnmapped++;
+                unmapped.add(playerId);
+            }
+        }
+
+        void sharedBoardRow(boolean mapped, int playerId) {
+            if (mapped) {
+                sharedBoardRowsRemapped++;
+            } else {
+                sharedBoardRowsUnmapped++;
                 unmapped.add(playerId);
             }
         }

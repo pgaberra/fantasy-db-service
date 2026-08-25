@@ -177,4 +177,17 @@ class ProjectionShareServiceTest {
 
         assertThat(projectionShareService.findByToken(token).authorUsername()).isEqualTo("alexander");
     }
+
+    @Test
+    void storesTheWholeBoardBesideTheRowsThePublicPageShows() {
+        UserProjection projection = projection();
+
+        ProjectionShare share = projectionShareService.share(
+                userId, projection.getId(), sharedPlayers("Connor McDavid"));
+
+        assertThat(share.getData().players()).hasSize(1);
+        assertThat(share.getBoard().players())
+                .hasSize(projection.getData().players().size())
+                .allSatisfy(player -> assertThat(player.stats()).isNotNull());
+    }
 }

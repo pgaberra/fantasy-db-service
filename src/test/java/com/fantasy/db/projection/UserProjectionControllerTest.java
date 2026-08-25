@@ -103,7 +103,7 @@ class UserProjectionControllerTest {
                         new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)))),
                 draft);
         return new UserProjection(PROJECTION_ID, USER_ID, name, kind, Season.SEASON_2026_2027, data,
-                Instant.now(), Instant.now());
+                null, null, Instant.now(), Instant.now());
     }
 
     private static DraftState draft(Instant finishedAt) {
