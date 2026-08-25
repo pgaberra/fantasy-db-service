@@ -1,5 +1,6 @@
 package com.fantasy.db.share;
 
+import com.fantasy.db.projection.PlayerIdSpace;
 import com.fantasy.db.projection.Season;
 import com.fantasy.db.share.dto.SharedBoard;
 import com.fantasy.db.share.dto.SharedProjectionData;
@@ -57,8 +58,14 @@ public class ProjectionShare {
     private SharedProjectionData data;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false)
     private SharedBoard board;
+
+    // Which platform's player ids the rows in `data` and `board` are keyed by. A share is
+    // otherwise frozen; this is the one thing that may still be rewritten, because an id that no
+    // longer resolves is not the picture that was shared either.
+    @Column(name = "player_id_space", nullable = false, length = 8)
+    private String playerIdSpace = PlayerIdSpace.YAHOO.getCode();
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -129,6 +136,22 @@ public class ProjectionShare {
 
     public SharedBoard getBoard() {
         return board;
+    }
+
+    public PlayerIdSpace getPlayerIdSpace() {
+        return PlayerIdSpace.fromCode(playerIdSpace);
+    }
+
+    /**
+     * Replaces the snapshot's rows and records which platform's ids they are now keyed by. The
+     * board goes with them: leaving it behind would hand an importer rows keyed by ids the
+     * player pool no longer knows.
+     */
+    public void remapPlayerIds(SharedProjectionData remapped, SharedBoard remappedBoard, PlayerIdSpace space) {
+        this.data = remapped;
+        this.board = remappedBoard;
+        this.playerIdSpace = space.getCode();
+        this.updatedAt = Instant.now();
     }
 
     public Instant getCreatedAt() {

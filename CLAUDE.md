@@ -96,7 +96,9 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     column) is every player row the projection had at share time — what an import copies. It
     is kept out of `data` so the public endpoint never serialises ~0.5 MB to a visitor who came
     to read a top list, and it is filled server-side from the stored projection rather than
-    uploaded, since that request size was already failing in production once.
+    uploaded, since that request size was already failing in production once. A player-id
+    remap rewrites `board` alongside `data` — a board left on the old numbering would hand
+    every later importer rows the player pool has forgotten.
   - The `token` is 16 random bytes from `SecureRandom`, base64url-encoded, not the projection's
     UUID. Publishing is **once and final**: sharing an already-shared projection returns the
     share it has, untouched, and there is no endpoint to refresh or withdraw one. Deleting the
@@ -120,8 +122,21 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     rename follows onto links already shared. It deliberately counts nothing: the share is fetched once for a
     chat client's link preview and again for its card, so a per-read counter measured crawlers
     rather than people (V13 dropped the column).
+- `playerid/` — a one-off: rewriting stored player ids from one platform's numbering to
+  another's. Yahoo stopped serving its player collection, ESPN provides the pool now, and the
+  same people are numbered differently on the two.
+  - `PlayerIdRemapService` — applies a crosswalk (old id → new id, computed by the BFF, which
+    is the only place that can see both pools) to every projection and share still marked
+    `player_id_space = 'yahoo'`, and stamps them `espn`. **Dry run by default**: an unqualified
+    call reports and writes nothing. An id the crosswalk does not cover is **left as it is**,
+    never dropped — a row the app cannot draw is invisible and recoverable, a deleted row is a
+    user's work gone. The marker is what makes a second run safe: the two id spaces overlap in
+    range, so re-running over an already-remapped row could translate an id that was never
+    Yahoo's.
+  - `PlayerIdRemapController` — `POST /api/v1/admin/player-ids/remap`.
 - `exception/` — `ErrorDto`, `GlobalExceptionHandler`. The whole service uses **built-in**
   exceptions rather than custom ones (`NoSuchElementException` → 404,
+  `IllegalArgumentException` → 400, `IllegalStateException` → 409,
   `DataIntegrityViolationException` → 409, `MethodArgumentNotValidException` → 400).
 
 ## Database & config

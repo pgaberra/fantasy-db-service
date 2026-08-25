@@ -1,6 +1,7 @@
 package com.fantasy.db.share;
 
 import com.fantasy.db.projection.PlayerBasis;
+import com.fantasy.db.projection.PlayerIdSpace;
 import com.fantasy.db.projection.PlayerType;
 import com.fantasy.db.projection.ProjectionKind;
 import com.fantasy.db.projection.ScoringType;
@@ -117,6 +118,15 @@ class ProjectionImportServiceTest {
         assertThat(imported.getSeason()).isEqualTo(Season.SEASON_2026_2027);
         assertThat(imported.getData().players()).hasSize(3);
         assertThat(imported.getData().settings().statWeights()).containsEntry("goals", 4.5);
+    }
+
+    @Test
+    void inheritsTheSharesPlayerIdSpaceRatherThanTheDefault() {
+        String token = share("My league");
+
+        UserProjection imported = projectionImportService.importFrom(readerId, token, null);
+
+        assertThat(imported.getPlayerIdSpace()).isEqualTo(PlayerIdSpace.YAHOO);
     }
 
     @Test

@@ -60,6 +60,7 @@ public class ProjectionImportService {
                 share.getSeason(),
                 data,
                 share.getToken(),
-                authorUsername));
+                authorUsername,
+                share.getPlayerIdSpace()));
     }
 }

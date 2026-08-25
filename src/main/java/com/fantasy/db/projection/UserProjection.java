@@ -51,6 +51,11 @@ public class UserProjection {
     @Column(name = "origin_author_username", updatable = false, length = 20)
     private String originAuthorUsername;
 
+    // Which platform's player ids the rows in `data` are keyed by. Stored as the code rather
+    // than as a mapped enum, for the same reason as `season`.
+    @Column(name = "player_id_space", nullable = false, length = 8)
+    private String playerIdSpace = PlayerIdSpace.YAHOO.getCode();
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -82,11 +87,19 @@ public class UserProjection {
         return new UserProjection(UUID.randomUUID(), userId, name, kind, season, data, null, null, now, now);
     }
 
+    /**
+     * The id space comes from the share rather than defaulting: the rows are a copy of what was
+     * published, so a board already remapped to ESPN's numbering must not look to a later remap
+     * pass like one still on Yahoo's.
+     */
     public static UserProjection importedFrom(UUID userId, String name, Season season, ProjectionData data,
-                                              String shareToken, String authorUsername) {
+                                              String shareToken, String authorUsername,
+                                              PlayerIdSpace playerIdSpace) {
         Instant now = Instant.now();
-        return new UserProjection(UUID.randomUUID(), userId, name, ProjectionKind.IMPORTED, season, data,
-                shareToken, authorUsername, now, now);
+        UserProjection imported = new UserProjection(UUID.randomUUID(), userId, name,
+                ProjectionKind.IMPORTED, season, data, shareToken, authorUsername, now, now);
+        imported.playerIdSpace = playerIdSpace.getCode();
+        return imported;
     }
 
     public void update(String name, ProjectionData data) {
@@ -125,6 +138,17 @@ public class UserProjection {
 
     public String getOriginAuthorUsername() {
         return originAuthorUsername;
+    }
+
+    public PlayerIdSpace getPlayerIdSpace() {
+        return PlayerIdSpace.fromCode(playerIdSpace);
+    }
+
+    /** Replaces the rows and records which platform's ids they are now keyed by. */
+    public void remapPlayerIds(ProjectionData remapped, PlayerIdSpace space) {
+        this.data = remapped;
+        this.playerIdSpace = space.getCode();
+        this.updatedAt = Instant.now();
     }
 
     public Instant getCreatedAt() {
