@@ -82,9 +82,12 @@ public class UserProjection {
     }
 
     public static UserProjection create(UUID userId, String name, ProjectionKind kind, Season season,
-                                        ProjectionData data) {
+                                        ProjectionData data, PlayerIdSpace playerIdSpace) {
         Instant now = Instant.now();
-        return new UserProjection(UUID.randomUUID(), userId, name, kind, season, data, null, null, now, now);
+        UserProjection projection = new UserProjection(
+                UUID.randomUUID(), userId, name, kind, season, data, null, null, now, now);
+        projection.playerIdSpace = playerIdSpace.getCode();
+        return projection;
     }
 
     /**

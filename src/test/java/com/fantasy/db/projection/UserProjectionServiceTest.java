@@ -55,7 +55,8 @@ class UserProjectionServiceTest {
     }
 
     private UserProjection create(String name) {
-        return userProjectionService.create(userId, name, ProjectionKind.PROJECTION, sampleData());
+        return userProjectionService.create(
+                userId, name, ProjectionKind.PROJECTION, sampleData(), PlayerIdSpace.YAHOO);
     }
 
     @Test
@@ -98,10 +99,12 @@ class UserProjectionServiceTest {
     @Test
     void enforcesUniqueNamePerUserAndKind() {
         userProjectionRepository.saveAndFlush(UserProjection.create(
-                userId, "Dynasty", ProjectionKind.PROJECTION, Season.SEASON_2026_2027, sampleData()));
+                userId, "Dynasty", ProjectionKind.PROJECTION, Season.SEASON_2026_2027, sampleData(),
+                PlayerIdSpace.YAHOO));
 
         assertThatThrownBy(() -> userProjectionRepository.saveAndFlush(UserProjection.create(
-                userId, "Dynasty", ProjectionKind.PROJECTION, Season.SEASON_2026_2027, sampleData())))
+                userId, "Dynasty", ProjectionKind.PROJECTION, Season.SEASON_2026_2027, sampleData(),
+                PlayerIdSpace.YAHOO)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -114,7 +117,7 @@ class UserProjectionServiceTest {
         create("Last Season's Stats");
 
         UserProjection preset = userProjectionService.create(
-                userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT, sampleData());
+                userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT, sampleData(), PlayerIdSpace.YAHOO);
 
         assertThat(preset.getId()).isNotNull();
         assertThat(userProjectionService.findAll(userId)).hasSize(2);
@@ -125,7 +128,7 @@ class UserProjectionServiceTest {
         create("Standard");
 
         UserProjection other = userProjectionService.create(
-                UUID.randomUUID(), "Standard", ProjectionKind.PROJECTION, sampleData());
+                UUID.randomUUID(), "Standard", ProjectionKind.PROJECTION, sampleData(), PlayerIdSpace.YAHOO);
 
         assertThat(other.getId()).isNotNull();
     }
@@ -140,10 +143,11 @@ class UserProjectionServiceTest {
 
     @Test
     void rejectsASecondPresetDraftForTheSameUser() {
-        userProjectionService.create(userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT, sampleData());
+        userProjectionService.create(
+                userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT, sampleData(), PlayerIdSpace.YAHOO);
 
         assertThatThrownBy(() -> userProjectionService.create(
-                userId, "Another preset", ProjectionKind.PRESET_DRAFT, sampleData()))
+                userId, "Another preset", ProjectionKind.PRESET_DRAFT, sampleData(), PlayerIdSpace.YAHOO))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -210,5 +214,13 @@ class UserProjectionServiceTest {
         userProjectionService.delete(userId, created.getId());
 
         assertThat(userProjectionService.findAll(userId)).isEmpty();
+    }
+
+    @Test
+    void stampsTheIdSpaceTheCallerStatedRatherThanAssumingYahoo() {
+        UserProjection espn = userProjectionService.create(
+                userId, "On ESPN ids", ProjectionKind.PROJECTION, sampleData(), PlayerIdSpace.ESPN);
+
+        assertThat(espn.getPlayerIdSpace()).isEqualTo(PlayerIdSpace.ESPN);
     }
 }

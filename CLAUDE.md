@@ -59,6 +59,9 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     column (`@JdbcTypeCode(SqlTypes.JSON)`). `season` is stamped from the
     `projections.current-season` config (the caller never sends it — not in
     `CreateProjectionRequest`); stored as the 8-digit code, exposed as the `Season` enum.
+    `player_id_space` is the opposite: the caller **must** state it on create (`@NotNull`,
+    no default), because only they know which platform's pool filled the rows, and a wrong
+    value is silent until a remap translates ids that were never in the space it assumed.
     `kind` (`ProjectionKind`) separates the projection a user makes and edits
     (`PROJECTION`) from the one that only exists to hold a draft started from a preset
     such as last season's stats (`PRESET_DRAFT`), and from a board copied out of someone

@@ -38,7 +38,8 @@ public class UserProjectionService {
     }
 
     @Transactional
-    public UserProjection create(UUID userId, String name, ProjectionKind kind, ProjectionData data) {
+    public UserProjection create(UUID userId, String name, ProjectionKind kind, ProjectionData data,
+                                 PlayerIdSpace playerIdSpace) {
         // Each user may keep at most one projection of the kinds that are a single thing: one
         // they made themselves, and one holding a draft started from a preset. Reject a second
         // one with a conflict (DataIntegrityViolationException -> 409, see
@@ -48,7 +49,7 @@ public class UserProjectionService {
                     "User already has a projection of kind " + kind.getCode());
         }
         return userProjectionRepository.save(
-                UserProjection.create(userId, name, kind, currentSeason, data));
+                UserProjection.create(userId, name, kind, currentSeason, data, playerIdSpace));
     }
 
     /**
