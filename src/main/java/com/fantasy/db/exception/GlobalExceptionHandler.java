@@ -41,6 +41,16 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, e.getMessage());
     }
 
+    /**
+     * The request is malformed in a way Bean Validation cannot express — a crosswalk that maps
+     * one player id two different ways, an unknown enum code. It reached here as a 500 before,
+     * which told the caller nothing about a mistake that is entirely theirs to fix.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorDto> handleIllegalArgument(IllegalArgumentException e) {
+        return build(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorDto> handleValidation(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()

@@ -45,6 +45,11 @@ public class UserProjection {
     @Column(nullable = false)
     private ProjectionData data;
 
+    // Which platform's player ids the rows in `data` are keyed by. Stored as the code rather
+    // than as a mapped enum, for the same reason as `season`.
+    @Column(name = "player_id_space", nullable = false, length = 8)
+    private String playerIdSpace = PlayerIdSpace.YAHOO.getCode();
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -101,6 +106,17 @@ public class UserProjection {
 
     public ProjectionData getData() {
         return data;
+    }
+
+    public PlayerIdSpace getPlayerIdSpace() {
+        return PlayerIdSpace.fromCode(playerIdSpace);
+    }
+
+    /** Replaces the rows and records which platform's ids they are now keyed by. */
+    public void remapPlayerIds(ProjectionData remapped, PlayerIdSpace space) {
+        this.data = remapped;
+        this.playerIdSpace = space.getCode();
+        this.updatedAt = Instant.now();
     }
 
     public Instant getCreatedAt() {
