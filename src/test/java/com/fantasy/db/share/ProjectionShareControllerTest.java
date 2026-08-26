@@ -6,7 +6,6 @@ import com.fantasy.db.projection.Season;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.ProjectionSettings;
-import com.fantasy.db.share.dto.SharedBoard;
 import com.fantasy.db.share.dto.SharedPlayer;
 import com.fantasy.db.share.dto.SharedProjectionData;
 import org.junit.jupiter.api.Test;
@@ -85,8 +84,6 @@ class ProjectionShareControllerTest {
                 "My league",
                 Season.SEASON_2026_2027,
                 new SharedProjectionData(settings, List.of(mcDavid)),
-                new SharedBoard(List.of(new PlayerProjection(
-                        1, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0))))),
                 Instant.parse("2026-08-01T10:00:00Z"),
                 Instant.parse("2026-08-02T10:00:00Z"));
     }

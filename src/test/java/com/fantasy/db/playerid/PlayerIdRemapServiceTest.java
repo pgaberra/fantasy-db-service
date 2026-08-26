@@ -20,7 +20,6 @@ import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
 import com.fantasy.db.share.ProjectionShare;
 import com.fantasy.db.share.ProjectionShareRepository;
-import com.fantasy.db.share.dto.SharedBoard;
 import com.fantasy.db.share.dto.SharedPlayer;
 import com.fantasy.db.share.dto.SharedProjectionData;
 import org.junit.jupiter.api.Test;
@@ -98,8 +97,7 @@ class PlayerIdRemapServiceTest {
                 UUID.randomUUID(), UUID.randomUUID(), "Shared", Season.fromCode("20262027"),
                 new SharedProjectionData(settings(), List.of(new SharedPlayer(
                         playerId, "Connor McDavid", "EDM", null, List.of("C"), PlayerType.SKATER,
-                        1, 512.5, stats()))),
-                new SharedBoard(List.of(new PlayerProjection(playerId, PlayerType.SKATER, stats())))));
+                        1, 512.5, stats())))));
     }
 
     private static PlayerIdRemapRequest request(boolean dryRun, PlayerIdPair... mappings) {
@@ -134,27 +132,26 @@ class PlayerIdRemapServiceTest {
     }
 
     /**
-     * The board an import copies is remapped with the rows the public page shows. Left behind, it
-     * would hand every later importer a projection keyed by ids the player pool has forgotten.
+     * A share's rows are also the board an import copies. Left on their old ids, they would hand
+     * every later importer a projection keyed by ids the player pool has forgotten.
      */
     @Test
-    void remapsTheBoardAnImportCopies() {
+    void remapsTheRowsAnImportCopies() {
         ProjectionShare share = storeShare(YAHOO_MCDAVID);
 
         remapService.remap(request(false, mcDavid()));
 
         ProjectionShare stored = shareRepository.findById(share.getId()).orElseThrow();
-        assertThat(stored.getBoard().players().getFirst().playerId()).isEqualTo(ESPN_MCDAVID);
+        assertThat(stored.getData().players().getFirst().playerId()).isEqualTo(ESPN_MCDAVID);
     }
 
     @Test
-    void countsBoardRowsApartFromTheRowsThePublicPageShows() {
+    void countsTheSharedRowsItWouldRemap() {
         storeShare(YAHOO_MCDAVID);
 
         PlayerIdRemapResponse response = remapService.remap(request(true, mcDavid()));
 
         assertThat(response.sharedRows().remapped()).isEqualTo(1);
-        assertThat(response.sharedBoardRows().remapped()).isEqualTo(1);
     }
 
     /** Everything else on the row is the user's work and must come back untouched. */

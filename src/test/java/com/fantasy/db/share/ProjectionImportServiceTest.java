@@ -84,11 +84,21 @@ class ProjectionImportServiceTest {
                 null);
     }
 
-    private static List<SharedPlayer> teaserRows() {
-        return List.of(new SharedPlayer(
-                1, "Connor McDavid", "EDM", "https://example.test/mcdavid.png", List.of("C"),
-                PlayerType.SKATER, 1, 412.5,
-                new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0))));
+    /** What a share publishes: the whole ranking, which is also what an import copies. */
+    private static List<SharedPlayer> publishedRows() {
+        return List.of(
+                new SharedPlayer(
+                        1, "Connor McDavid", "EDM", "https://example.test/mcdavid.png", List.of("C"),
+                        PlayerType.SKATER, 1, 412.5,
+                        new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0))),
+                new SharedPlayer(
+                        2, "Leon Draisaitl", "EDM", "https://example.test/draisaitl.png", List.of("C"),
+                        PlayerType.SKATER, 2, 389.7,
+                        new PlayerStats(Map.of("gp", 80.0), Map.of("goals", 51.0))),
+                new SharedPlayer(
+                        3, "Igor Shesterkin", "NYR", null, null,
+                        PlayerType.GOALIE, 3, 301.2,
+                        new PlayerStats(Map.of("gp", 60.0), Map.of("wins", 38.0))));
     }
 
     /**
@@ -103,11 +113,11 @@ class ProjectionImportServiceTest {
         UUID authorId = userRepository.save(author).getId();
         UserProjection projection = userProjectionService.create(
                 authorId, name, ProjectionKind.PROJECTION, projectionData(), PlayerIdSpace.YAHOO);
-        return projectionShareService.share(authorId, projection.getId(), teaserRows()).getToken();
+        return projectionShareService.share(authorId, projection.getId(), publishedRows()).getToken();
     }
 
     @Test
-    void copiesTheWholeBoardRatherThanTheRowsThePublicPageShows() {
+    void copiesTheBoardTheShareWasPublishedWith() {
         String token = share("My league");
 
         UserProjection imported = projectionImportService.importFrom(readerId, token, null);
@@ -118,6 +128,26 @@ class ProjectionImportServiceTest {
         assertThat(imported.getSeason()).isEqualTo(Season.SEASON_2026_2027);
         assertThat(imported.getData().players()).hasSize(3);
         assertThat(imported.getData().settings().statWeights()).containsEntry("goals", 4.5);
+    }
+
+    /**
+     * The rows come from the snapshot rather than from the author's projection, which has moved on
+     * since — and they arrive stripped back to what a projection stores, since the identity and
+     * rank a published row carries belong to the page that renders it, not to the importer's copy.
+     */
+    @Test
+    void copiesTheSnapshotRatherThanTheAuthorsProjectionAsItStandsNow() {
+        String token = share("My league");
+
+        UserProjection imported = projectionImportService.importFrom(readerId, token, null);
+
+        assertThat(imported.getData().players())
+                .extracting(PlayerProjection::playerId)
+                .containsExactly(1, 2, 3);
+        PlayerProjection first = imported.getData().players().getFirst();
+        assertThat(first.type()).isEqualTo(PlayerType.SKATER);
+        assertThat(first.stats().scoring()).containsEntry("goals", 64.0);
+        assertThat(first.stats().utility()).containsEntry("gp", 82.0);
     }
 
     @Test

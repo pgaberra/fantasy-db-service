@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -208,6 +210,44 @@ class UserProjectionControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY.replace("\"My league\"", "\"\"")))
                 .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * A board is every player in the league — around 1,500 rows — so the cap sits well above that
+     * and exists to stop an oversized body being parsed and stored rather than to limit anyone.
+     */
+    @Test
+    void createReturns400OnMorePlayerRowsThanAnyLeagueHas() throws Exception {
+        mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithPlayerRows(2001)))
+                .andExpect(status().isBadRequest());
+
+        verify(userProjectionService, never()).create(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void createAcceptsAsManyRowsAsTheLargestPlayerPoolHas() throws Exception {
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), any(), any(), any()))
+                .thenReturn(projection("My league"));
+
+        mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithPlayerRows(2000)))
+                .andExpect(status().isCreated());
+    }
+
+    /** Built rather than patched into {@link #VALID_BODY}, so it does not depend on that layout. */
+    private static String bodyWithPlayerRows(int rows) {
+        String players = IntStream.rangeClosed(1, rows)
+                .mapToObj(id -> ("{\"playerId\":%d,\"type\":\"skater\","
+                        + "\"stats\":{\"utility\":{\"gp\":82},\"scoring\":{\"goals\":64}}}").formatted(id))
+                .collect(Collectors.joining(","));
+        return ("{\"name\":\"My league\",\"playerIdSpace\":\"espn\",\"data\":{"
+                + "\"settings\":{\"scoringType\":\"points\",\"statWeights\":{\"goals\":4.5},"
+                + "\"activeScoringColumns\":[\"goals\"],\"activeUtilityColumns\":[\"gp\"],"
+                + "\"scaleSettings\":{},\"decimalSettings\":{\"goals\":0},\"useDefaultDecimals\":true},"
+                + "\"players\":[%s]}}").formatted(players);
     }
 
     @Test

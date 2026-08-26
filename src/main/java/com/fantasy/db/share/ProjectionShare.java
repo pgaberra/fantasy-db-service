@@ -2,7 +2,6 @@ package com.fantasy.db.share;
 
 import com.fantasy.db.projection.PlayerIdSpace;
 import com.fantasy.db.projection.Season;
-import com.fantasy.db.share.dto.SharedBoard;
 import com.fantasy.db.share.dto.SharedProjectionData;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -57,11 +56,7 @@ public class ProjectionShare {
     @Column(nullable = false)
     private SharedProjectionData data;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(nullable = false)
-    private SharedBoard board;
-
-    // Which platform's player ids the rows in `data` and `board` are keyed by. A share is
+    // Which platform's player ids the rows in `data` are keyed by. A share is
     // otherwise frozen; this is the one thing that may still be rewritten, because an id that no
     // longer resolves is not the picture that was shared either.
     @Column(name = "player_id_space", nullable = false, length = 8)
@@ -78,7 +73,7 @@ public class ProjectionShare {
     }
 
     public ProjectionShare(UUID id, UUID projectionId, UUID userId, String token,
-                           String name, Season season, SharedProjectionData data, SharedBoard board,
+                           String name, Season season, SharedProjectionData data,
                            Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.projectionId = projectionId;
@@ -87,16 +82,15 @@ public class ProjectionShare {
         this.name = name;
         this.season = season.getCode();
         this.data = data;
-        this.board = board;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
 
     public static ProjectionShare create(UUID projectionId, UUID userId, String name,
-                                         Season season, SharedProjectionData data, SharedBoard board) {
+                                         Season season, SharedProjectionData data) {
         Instant now = Instant.now();
         return new ProjectionShare(UUID.randomUUID(), projectionId, userId, generateToken(),
-                name, season, data, board, now, now);
+                name, season, data, now, now);
     }
 
 
@@ -134,22 +128,17 @@ public class ProjectionShare {
         return data;
     }
 
-    public SharedBoard getBoard() {
-        return board;
-    }
-
     public PlayerIdSpace getPlayerIdSpace() {
         return PlayerIdSpace.fromCode(playerIdSpace);
     }
 
     /**
-     * Replaces the snapshot's rows and records which platform's ids they are now keyed by. The
-     * board goes with them: leaving it behind would hand an importer rows keyed by ids the
-     * player pool no longer knows.
+     * Replaces the snapshot's rows and records which platform's ids they are now keyed by. These
+     * rows are also what an import copies, so an id the player pool no longer knows would follow
+     * the board into the importer's account if it were left behind.
      */
-    public void remapPlayerIds(SharedProjectionData remapped, SharedBoard remappedBoard, PlayerIdSpace space) {
+    public void remapPlayerIds(SharedProjectionData remapped, PlayerIdSpace space) {
         this.data = remapped;
-        this.board = remappedBoard;
         this.playerIdSpace = space.getCode();
         this.updatedAt = Instant.now();
     }
