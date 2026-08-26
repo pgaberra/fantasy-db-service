@@ -17,11 +17,9 @@ public record PlayerIdRemapResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) RemapCounts draftPicks,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int sharesScanned,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "The ranked rows a share's public page shows")
+                description = "The rows a share published — what its public page shows and what "
+                        + "an import copies")
         RemapCounts sharedRows,
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "The full board behind a share, which is what an import copies")
-        RemapCounts sharedBoardRows,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
                 description = "Distinct stored ids the crosswalk had no entry for, at most 50 of them")
         List<Integer> unmappedPlayerIds

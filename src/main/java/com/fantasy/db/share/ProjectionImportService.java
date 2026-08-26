@@ -2,12 +2,15 @@ package com.fantasy.db.share;
 
 import com.fantasy.db.projection.UserProjection;
 import com.fantasy.db.projection.UserProjectionRepository;
+import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.user.User;
+import com.fantasy.db.share.dto.SharedPlayer;
 import com.fantasy.db.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
@@ -52,7 +55,7 @@ public class ProjectionImportService {
                 .map(User::getUsername)
                 .orElseThrow(() -> new NoSuchElementException("No user found for that share"));
         ProjectionData data = new ProjectionData(
-                share.getData().settings(), share.getBoard().players(), null);
+                share.getData().settings(), boardOf(share), null);
 
         return userProjectionRepository.saveAndFlush(UserProjection.importedFrom(
                 userId,
@@ -62,5 +65,20 @@ public class ProjectionImportService {
                 share.getToken(),
                 authorUsername,
                 share.getPlayerIdSpace()));
+    }
+
+    /**
+     * The published rows, stripped back to what a projection stores. A shared row carries the
+     * identity and ranking the public page needs on top of that; the account importing it has a
+     * player pool of its own to draw names from, and a ranking of its own to compute.
+     */
+    private static List<PlayerProjection> boardOf(ProjectionShare share) {
+        return share.getData().players().stream()
+                .map(ProjectionImportService::toPlayerProjection)
+                .toList();
+    }
+
+    private static PlayerProjection toPlayerProjection(SharedPlayer player) {
+        return new PlayerProjection(player.playerId(), player.type(), player.stats());
     }
 }

@@ -92,16 +92,17 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     `ProjectionSummaryResponse`, plus the `ProjectionData` model records.
 - `share/` — feature package (a projection published under a public link):
   - `ProjectionShare` — JPA `@Entity` (UUID id, unique `projection_id`, `user_id`, unique
-    `token`, `name`, `season`, `data`, `board`, timestamps). `data` is a
+    `token`, `name`, `season`, `data`, timestamps). `data` is a
     **snapshot** (`SharedProjectionData` in a `jsonb` column): the settings and the ranked rows
     as they were when shared, so a link posted publicly keeps showing what was shared rather
-    than whatever the owner edited afterwards. `board` (`SharedBoard`, a second `jsonb`
-    column) is every player row the projection had at share time — what an import copies. It
-    is kept out of `data` so the public endpoint never serialises ~0.5 MB to a visitor who came
-    to read a top list, and it is filled server-side from the stored projection rather than
-    uploaded, since that request size was already failing in production once. A player-id
-    remap rewrites `board` alongside `data` — a board left on the old numbering would hand
-    every later importer rows the player pool has forgotten.
+    than whatever the owner edited afterwards. Those rows are the **whole board**, and they are
+    the only copy of it — a shared row already carries everything a stored player row does (id,
+    type, stats) on top of the identity and rank the public page renders, so an import derives
+    its rows from `data` rather than from a second column. (It had one, `board`, until V17: back
+    when `data` held a capped teaser, an import needed the full rows from somewhere else. How
+    much of `data` a reader actually receives is now the BFF's call, not a question of what is
+    stored.) A player-id remap rewrites these rows — left on the old numbering they would hand
+    every later importer ids the player pool has forgotten.
   - The `token` is 16 random bytes from `SecureRandom`, base64url-encoded, not the projection's
     UUID. Publishing is **once and final**: sharing an already-shared projection returns the
     share it has, untouched, and there is no endpoint to refresh or withdraw one. Deleting the

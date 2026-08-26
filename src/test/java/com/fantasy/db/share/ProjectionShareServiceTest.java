@@ -180,16 +180,20 @@ class ProjectionShareServiceTest {
         assertThat(projectionShareService.findByToken(token).authorUsername()).isEqualTo("alexander");
     }
 
+    /**
+     * The rows the caller published are the only copy kept. They are what the public page renders
+     * and what an import copies, so storing the projection's own rows beside them would be the
+     * same board twice.
+     */
     @Test
-    void storesTheWholeBoardBesideTheRowsThePublicPageShows() {
+    void storesOnlyTheRowsItWasGiven() {
         UserProjection projection = projection();
 
         ProjectionShare share = projectionShareService.share(
                 userId, projection.getId(), sharedPlayers("Connor McDavid"));
 
-        assertThat(share.getData().players()).hasSize(1);
-        assertThat(share.getBoard().players())
-                .hasSize(projection.getData().players().size())
+        assertThat(share.getData().players())
+                .hasSize(1)
                 .allSatisfy(player -> assertThat(player.stats()).isNotNull());
     }
 }
