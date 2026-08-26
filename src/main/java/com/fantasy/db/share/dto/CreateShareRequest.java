@@ -9,6 +9,8 @@ import java.util.List;
 
 public record CreateShareRequest(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "The ranked rows to publish, in display order. The caller decides how many to include; the cap is a safety limit, not the product rule.")
-        @NotNull @Valid @Size(max = 200) List<SharedPlayer> players
+                description = "The ranked rows to publish, in display order. A share carries the "
+                        + "whole board so a signed-in visitor can read all of it; the cap is a "
+                        + "safety limit sized above the largest player pool, not the product rule.")
+        @NotNull @Valid @Size(max = 2000) List<SharedPlayer> players
 ) {}
