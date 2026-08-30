@@ -2,6 +2,7 @@ package com.fantasy.db.projection.dto;
 
 import com.fantasy.db.projection.DraftStatus;
 import com.fantasy.db.projection.ProjectionKind;
+import com.fantasy.db.projection.ProjectionPreset;
 import com.fantasy.db.projection.Season;
 import com.fantasy.db.projection.UserProjection;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -12,6 +13,9 @@ public record ProjectionSummaryResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String id,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String name,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ProjectionKind kind,
+        @Schema(description = "Which preset a preset draft was started from. Absent on any other "
+                + "kind, and on preset drafts stored before this was recorded.")
+        ProjectionPreset preset,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Season season,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant createdAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant updatedAt,
@@ -24,6 +28,7 @@ public record ProjectionSummaryResponse(
                 projection.getId().toString(),
                 projection.getName(),
                 projection.getKind(),
+                projection.getPreset(),
                 projection.getSeason(),
                 projection.getCreatedAt(),
                 projection.getUpdatedAt(),

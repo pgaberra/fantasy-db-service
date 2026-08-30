@@ -38,18 +38,30 @@ public class UserProjectionService {
     }
 
     @Transactional
-    public UserProjection create(UUID userId, String name, ProjectionKind kind, ProjectionData data,
+    public UserProjection create(UUID userId, String name, ProjectionKind kind,
+                                 ProjectionPreset preset, ProjectionData data,
                                  PlayerIdSpace playerIdSpace) {
-        // Each user may keep at most one projection of the kinds that are a single thing: one
-        // they made themselves, and one holding a draft started from a preset. Reject a second
-        // one with a conflict (DataIntegrityViolationException -> 409, see
-        // GlobalExceptionHandler). The season is stamped from config, not supplied by the caller.
-        if (kind.isUniquePerUser() && userProjectionRepository.existsByUserIdAndKind(userId, kind)) {
+        // Each user may keep at most one projection they made themselves, and at most one draft
+        // per preset — the presets are separate starting points, and drafting against one is no
+        // reason to be barred from the other. Reject a second with a conflict
+        // (DataIntegrityViolationException -> 409, see GlobalExceptionHandler). The season is
+        // stamped from config, not supplied by the caller.
+        if (alreadyHas(userId, kind, preset)) {
             throw new DataIntegrityViolationException(
-                    "User already has a projection of kind " + kind.getCode());
+                    "User already has a projection of kind " + kind.getCode()
+                            + (preset == null ? "" : " for preset " + preset.getCode()));
         }
         return userProjectionRepository.save(
-                UserProjection.create(userId, name, kind, currentSeason, data, playerIdSpace));
+                UserProjection.create(userId, name, kind, preset, currentSeason, data, playerIdSpace));
+    }
+
+    private boolean alreadyHas(UUID userId, ProjectionKind kind, ProjectionPreset preset) {
+        if (!kind.isUniquePerUser()) {
+            return false;
+        }
+        return kind == ProjectionKind.PRESET_DRAFT
+                ? userProjectionRepository.existsByUserIdAndKindAndPreset(userId, kind, preset)
+                : userProjectionRepository.existsByUserIdAndKind(userId, kind);
     }
 
     /**

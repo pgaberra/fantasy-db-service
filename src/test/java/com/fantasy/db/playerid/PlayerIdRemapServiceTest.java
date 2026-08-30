@@ -78,7 +78,7 @@ class PlayerIdRemapServiceTest {
             players.add(new PlayerProjection(playerId, PlayerType.SKATER, stats()));
         }
         return projectionRepository.save(UserProjection.create(
-                UUID.randomUUID(), "League " + UUID.randomUUID(), ProjectionKind.PROJECTION,
+                UUID.randomUUID(), "League " + UUID.randomUUID(), ProjectionKind.PROJECTION, null,
                 Season.fromCode("20262027"), new ProjectionData(settings(), players, draft),
                 PlayerIdSpace.YAHOO));
     }

@@ -56,7 +56,7 @@ class UserProjectionServiceTest {
 
     private UserProjection create(String name) {
         return userProjectionService.create(
-                userId, name, ProjectionKind.PROJECTION, sampleData(), PlayerIdSpace.YAHOO);
+                userId, name, ProjectionKind.PROJECTION, null, sampleData(), PlayerIdSpace.YAHOO);
     }
 
     @Test
@@ -99,11 +99,11 @@ class UserProjectionServiceTest {
     @Test
     void enforcesUniqueNamePerUserAndKind() {
         userProjectionRepository.saveAndFlush(UserProjection.create(
-                userId, "Dynasty", ProjectionKind.PROJECTION, Season.SEASON_2026_2027, sampleData(),
+                userId, "Dynasty", ProjectionKind.PROJECTION, null, Season.SEASON_2026_2027, sampleData(),
                 PlayerIdSpace.YAHOO));
 
         assertThatThrownBy(() -> userProjectionRepository.saveAndFlush(UserProjection.create(
-                userId, "Dynasty", ProjectionKind.PROJECTION, Season.SEASON_2026_2027, sampleData(),
+                userId, "Dynasty", ProjectionKind.PROJECTION, null, Season.SEASON_2026_2027, sampleData(),
                 PlayerIdSpace.YAHOO)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
@@ -117,7 +117,7 @@ class UserProjectionServiceTest {
         create("Last Season's Stats");
 
         UserProjection preset = userProjectionService.create(
-                userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT, sampleData(), PlayerIdSpace.YAHOO);
+                userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT, null, sampleData(), PlayerIdSpace.YAHOO);
 
         assertThat(preset.getId()).isNotNull();
         assertThat(userProjectionService.findAll(userId)).hasSize(2);
@@ -128,7 +128,7 @@ class UserProjectionServiceTest {
         create("Standard");
 
         UserProjection other = userProjectionService.create(
-                UUID.randomUUID(), "Standard", ProjectionKind.PROJECTION, sampleData(), PlayerIdSpace.YAHOO);
+                UUID.randomUUID(), "Standard", ProjectionKind.PROJECTION, null, sampleData(), PlayerIdSpace.YAHOO);
 
         assertThat(other.getId()).isNotNull();
     }
@@ -142,12 +142,40 @@ class UserProjectionServiceTest {
     }
 
     @Test
-    void rejectsASecondPresetDraftForTheSameUser() {
-        userProjectionService.create(
-                userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT, sampleData(), PlayerIdSpace.YAHOO);
+    void rejectsASecondDraftAgainstTheSamePreset() {
+        userProjectionService.create(userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT,
+                ProjectionPreset.LAST_SEASON, sampleData(), PlayerIdSpace.YAHOO);
 
         assertThatThrownBy(() -> userProjectionService.create(
-                userId, "Another preset", ProjectionKind.PRESET_DRAFT, sampleData(), PlayerIdSpace.YAHOO))
+                userId, "Last Season's Stats again", ProjectionKind.PRESET_DRAFT,
+                ProjectionPreset.LAST_SEASON, sampleData(), PlayerIdSpace.YAHOO))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    // The presets are separate starting points. Drafting against one is no reason to be barred
+    // from the other, which is what the rule said while a preset draft was a single thing.
+    @Test
+    void allowsOneDraftAgainstEachPreset() {
+        userProjectionService.create(userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT,
+                ProjectionPreset.LAST_SEASON, sampleData(), PlayerIdSpace.YAHOO);
+
+        UserProjection model = userProjectionService.create(userId, "AI Projection",
+                ProjectionKind.PRESET_DRAFT, ProjectionPreset.MODEL, sampleData(), PlayerIdSpace.YAHOO);
+
+        assertThat(model.getPreset()).isEqualTo(ProjectionPreset.MODEL);
+        assertThat(userProjectionService.findAll(userId)).hasSize(2);
+    }
+
+    // Drafts stored before the column existed carry no preset. Two of those are still one thing
+    // too many — the migration gives every one of them a preset, so this is the belt to that brace.
+    @Test
+    void rejectsASecondPresetDraftWithNoPresetRecorded() {
+        userProjectionService.create(userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT,
+                null, sampleData(), PlayerIdSpace.YAHOO);
+
+        assertThatThrownBy(() -> userProjectionService.create(
+                userId, "Another preset", ProjectionKind.PRESET_DRAFT, null, sampleData(),
+                PlayerIdSpace.YAHOO))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -219,7 +247,7 @@ class UserProjectionServiceTest {
     @Test
     void stampsTheIdSpaceTheCallerStatedRatherThanAssumingYahoo() {
         UserProjection espn = userProjectionService.create(
-                userId, "On ESPN ids", ProjectionKind.PROJECTION, sampleData(), PlayerIdSpace.ESPN);
+                userId, "On ESPN ids", ProjectionKind.PROJECTION, null, sampleData(), PlayerIdSpace.ESPN);
 
         assertThat(espn.getPlayerIdSpace()).isEqualTo(PlayerIdSpace.ESPN);
     }

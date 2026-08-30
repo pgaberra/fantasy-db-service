@@ -14,5 +14,7 @@ public interface UserProjectionRepository extends JpaRepository<UserProjection, 
 
     boolean existsByUserIdAndKind(UUID userId, ProjectionKind kind);
 
+    boolean existsByUserIdAndKindAndPreset(UUID userId, ProjectionKind kind, ProjectionPreset preset);
+
     List<UserProjection> findAllByPlayerIdSpace(String playerIdSpace);
 }
