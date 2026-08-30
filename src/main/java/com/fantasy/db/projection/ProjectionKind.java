@@ -25,13 +25,16 @@ public enum ProjectionKind {
     }
 
     /**
-     * Whether a user is limited in how many of this kind they may keep. Their own work is a
-     * single thing, and so is their draft against any one preset — but there is more than one
-     * preset, so {@code PRESET_DRAFT} is limited per preset rather than outright (see
-     * {@code UserProjectionService.create}). Imported boards are not limited at all: there is no
-     * reason to be able to draft against one friend's numbers but not two.
+     * Whether a user is limited in how many of this kind they may keep. Only {@code PRESET_DRAFT}
+     * is: a draft against one preset is a single thing, though there is more than one preset, so
+     * the limit is per preset rather than outright (see {@code UserProjectionService.create}).
+     *
+     * <p>The other two are unlimited. Imported boards always were — there is no reason to be able
+     * to draft against one friend's numbers but not two — and a user's own work no longer is
+     * either, now that a projection can be started from a copy of another one and kept beside it.
+     * What still keeps two of them apart is the name: {@code (user_id, kind, name)} is unique.
      */
     public boolean isUniquePerUser() {
-        return this != IMPORTED;
+        return this == PRESET_DRAFT;
     }
 }

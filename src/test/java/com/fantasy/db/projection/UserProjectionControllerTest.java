@@ -251,9 +251,9 @@ class UserProjectionControllerTest {
     }
 
     @Test
-    void createReturns409WhenUserAlreadyHasProjection() throws Exception {
+    void createReturns409WhenTheNameIsTaken() throws Exception {
         when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PROJECTION), any(), any(), any()))
-                .thenThrow(new DataIntegrityViolationException("User already has a projection"));
+                .thenThrow(new DataIntegrityViolationException("Name already taken"));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
                         .contentType(MediaType.APPLICATION_JSON)

@@ -41,11 +41,12 @@ public class UserProjectionService {
     public UserProjection create(UUID userId, String name, ProjectionKind kind,
                                  ProjectionPreset preset, ProjectionData data,
                                  PlayerIdSpace playerIdSpace) {
-        // Each user may keep at most one projection they made themselves, and at most one draft
-        // per preset — the presets are separate starting points, and drafting against one is no
-        // reason to be barred from the other. Reject a second with a conflict
-        // (DataIntegrityViolationException -> 409, see GlobalExceptionHandler). The season is
-        // stamped from config, not supplied by the caller.
+        // Each user may keep at most one draft per preset — the presets are separate starting
+        // points, and drafting against one is no reason to be barred from the other. Reject a
+        // second with a conflict (DataIntegrityViolationException -> 409, see
+        // GlobalExceptionHandler). Projections a user makes and boards they import are not
+        // limited in number; a second one with a name already taken is rejected by the unique
+        // index instead. The season is stamped from config, not supplied by the caller.
         if (alreadyHas(userId, kind, preset)) {
             throw new DataIntegrityViolationException(
                     "User already has a projection of kind " + kind.getCode()
@@ -56,12 +57,8 @@ public class UserProjectionService {
     }
 
     private boolean alreadyHas(UUID userId, ProjectionKind kind, ProjectionPreset preset) {
-        if (!kind.isUniquePerUser()) {
-            return false;
-        }
-        return kind == ProjectionKind.PRESET_DRAFT
-                ? userProjectionRepository.existsByUserIdAndKindAndPreset(userId, kind, preset)
-                : userProjectionRepository.existsByUserIdAndKind(userId, kind);
+        return kind.isUniquePerUser()
+                && userProjectionRepository.existsByUserIdAndKindAndPreset(userId, kind, preset);
     }
 
     /**

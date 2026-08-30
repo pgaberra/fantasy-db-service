@@ -133,12 +133,19 @@ class UserProjectionServiceTest {
         assertThat(other.getId()).isNotNull();
     }
 
+    /**
+     * A user may keep as many projections as they like — one started from a copy of another is
+     * the point of allowing it. What still tells two apart is the name, which
+     * {@link #enforcesUniqueNamePerUserAndKind()} covers.
+     */
     @Test
-    void rejectsASecondProjectionForTheSameUser() {
+    void allowsASecondProjectionForTheSameUser() {
         create("First");
 
-        assertThatThrownBy(() -> create("Second"))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        UserProjection second = create("Second");
+
+        assertThat(second.getId()).isNotNull();
+        assertThat(userProjectionService.findAll(userId)).hasSize(2);
     }
 
     @Test
