@@ -56,7 +56,7 @@ class ProjectionImportControllerTest {
                         new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)))),
                 null);
         return new UserProjection(PROJECTION_ID, USER_ID, "My league", ProjectionKind.IMPORTED,
-                Season.SEASON_2026_2027, data, "s0mErAnd0mT0k3nV4lu3ab", "alex",
+                null, Season.SEASON_2026_2027, data, "s0mErAnd0mT0k3nV4lu3ab", "alex",
                 Instant.parse("2026-08-01T10:00:00Z"), Instant.parse("2026-08-01T10:00:00Z"));
     }
 

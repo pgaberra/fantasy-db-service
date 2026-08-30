@@ -94,7 +94,7 @@ class ProjectionShareServiceTest {
 
     private UserProjection projection() {
         return userProjectionService.create(
-                userId, "My league", ProjectionKind.PROJECTION, projectionData(), PlayerIdSpace.YAHOO);
+                userId, "My league", ProjectionKind.PROJECTION, null, projectionData(), PlayerIdSpace.YAHOO);
     }
 
     @Test
@@ -159,7 +159,7 @@ class ProjectionShareServiceTest {
     void refusesToShareUntilTheAccountHasAUsername() {
         User nameless = userRepository.save(User.create("nameless@example.com", "hash"));
         UserProjection projection = userProjectionService.create(
-                nameless.getId(), "Their league", ProjectionKind.PROJECTION, projectionData(), PlayerIdSpace.YAHOO);
+                nameless.getId(), "Their league", ProjectionKind.PROJECTION, null, projectionData(), PlayerIdSpace.YAHOO);
 
         assertThatThrownBy(() -> projectionShareService.share(
                 nameless.getId(), projection.getId(), sharedPlayers("Connor McDavid")))

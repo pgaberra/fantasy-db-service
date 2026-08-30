@@ -35,6 +35,14 @@ public class UserProjection {
     @Column(nullable = false, updatable = false, length = 20)
     private ProjectionKind kind;
 
+    /**
+     * Which preset a {@link ProjectionKind#PRESET_DRAFT} was started from. Null on every other
+     * kind, and on preset drafts stored before the column existed — see V18.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(updatable = false, length = 20)
+    private ProjectionPreset preset;
+
     // Stored as the season's 8-digit code (e.g. "20262027"); exposed as the Season enum.
     // Kept as a plain String column so Hibernate doesn't auto-generate an enum CHECK
     // constraint on the constant names (which wouldn't match the stored codes).
@@ -66,13 +74,15 @@ public class UserProjection {
         // Required by JPA
     }
 
-    public UserProjection(UUID id, UUID userId, String name, ProjectionKind kind, Season season,
+    public UserProjection(UUID id, UUID userId, String name, ProjectionKind kind,
+                          ProjectionPreset preset, Season season,
                           ProjectionData data, String originShareToken, String originAuthorUsername,
                           Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.userId = userId;
         this.name = name;
         this.kind = kind;
+        this.preset = preset;
         this.season = season.getCode();
         this.data = data;
         this.originShareToken = originShareToken;
@@ -81,11 +91,12 @@ public class UserProjection {
         this.updatedAt = updatedAt;
     }
 
-    public static UserProjection create(UUID userId, String name, ProjectionKind kind, Season season,
+    public static UserProjection create(UUID userId, String name, ProjectionKind kind,
+                                        ProjectionPreset preset, Season season,
                                         ProjectionData data, PlayerIdSpace playerIdSpace) {
         Instant now = Instant.now();
         UserProjection projection = new UserProjection(
-                UUID.randomUUID(), userId, name, kind, season, data, null, null, now, now);
+                UUID.randomUUID(), userId, name, kind, preset, season, data, null, null, now, now);
         projection.playerIdSpace = playerIdSpace.getCode();
         return projection;
     }
@@ -100,7 +111,7 @@ public class UserProjection {
                                               PlayerIdSpace playerIdSpace) {
         Instant now = Instant.now();
         UserProjection imported = new UserProjection(UUID.randomUUID(), userId, name,
-                ProjectionKind.IMPORTED, season, data, shareToken, authorUsername, now, now);
+                ProjectionKind.IMPORTED, null, season, data, shareToken, authorUsername, now, now);
         imported.playerIdSpace = playerIdSpace.getCode();
         return imported;
     }
@@ -125,6 +136,10 @@ public class UserProjection {
 
     public ProjectionKind getKind() {
         return kind;
+    }
+
+    public ProjectionPreset getPreset() {
+        return preset;
     }
 
     public Season getSeason() {

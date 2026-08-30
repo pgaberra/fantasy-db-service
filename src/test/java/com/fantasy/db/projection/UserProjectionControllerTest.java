@@ -107,7 +107,7 @@ class UserProjectionControllerTest {
                 List.of(new PlayerProjection(1, PlayerType.SKATER,
                         new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)))),
                 draft);
-        return new UserProjection(PROJECTION_ID, USER_ID, name, kind, Season.SEASON_2026_2027, data,
+        return new UserProjection(PROJECTION_ID, USER_ID, name, kind, null, Season.SEASON_2026_2027, data,
                 null, null, Instant.now(), Instant.now());
     }
 
@@ -177,7 +177,7 @@ class UserProjectionControllerTest {
 
     @Test
     void createReturns201() throws Exception {
-        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PROJECTION), any(), any()))
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PROJECTION), any(), any(), any()))
                 .thenReturn(projection("My league"));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
@@ -190,7 +190,7 @@ class UserProjectionControllerTest {
 
     @Test
     void createStoresTheRequestedKind() throws Exception {
-        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any(), any()))
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any(), any(), any()))
                 .thenReturn(projection("My league", null, ProjectionKind.PRESET_DRAFT));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
@@ -201,7 +201,7 @@ class UserProjectionControllerTest {
                 .andExpect(jsonPath("$.kind").value("preset_draft"));
 
         verify(userProjectionService)
-                .create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any(), any());
+                .create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any(), any(), any());
     }
 
     @Test
@@ -223,12 +223,12 @@ class UserProjectionControllerTest {
                         .content(bodyWithPlayerRows(2001)))
                 .andExpect(status().isBadRequest());
 
-        verify(userProjectionService, never()).create(any(), any(), any(), any(), any());
+        verify(userProjectionService, never()).create(any(), any(), any(), any(), any(), any());
     }
 
     @Test
     void createAcceptsAsManyRowsAsTheLargestPlayerPoolHas() throws Exception {
-        when(userProjectionService.create(eq(USER_ID), eq("My league"), any(), any(), any()))
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), any(), any(), any(), any()))
                 .thenReturn(projection("My league"));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
@@ -252,7 +252,7 @@ class UserProjectionControllerTest {
 
     @Test
     void createReturns409WhenUserAlreadyHasProjection() throws Exception {
-        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PROJECTION), any(), any()))
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PROJECTION), any(), any(), any()))
                 .thenThrow(new DataIntegrityViolationException("User already has a projection"));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
@@ -309,7 +309,7 @@ class UserProjectionControllerTest {
     @Test
     void forwardsThePlayerIdSpaceTheCallerStated() throws Exception {
         when(userProjectionService.create(eq(USER_ID), eq("My league"),
-                eq(ProjectionKind.PROJECTION), any(), any()))
+                eq(ProjectionKind.PROJECTION), any(), any(), any()))
                 .thenReturn(projection("My league"));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
@@ -318,7 +318,7 @@ class UserProjectionControllerTest {
                 .andExpect(status().isCreated());
 
         verify(userProjectionService).create(eq(USER_ID), eq("My league"),
-                eq(ProjectionKind.PROJECTION), any(), eq(PlayerIdSpace.ESPN));
+                eq(ProjectionKind.PROJECTION), any(), any(), eq(PlayerIdSpace.ESPN));
     }
 
     @Test
@@ -328,6 +328,6 @@ class UserProjectionControllerTest {
                         .content(VALID_BODY.replace("\"playerIdSpace\": \"espn\",", "")))
                 .andExpect(status().isBadRequest());
 
-        verify(userProjectionService, never()).create(any(), any(), any(), any(), any());
+        verify(userProjectionService, never()).create(any(), any(), any(), any(), any(), any());
     }
 }
