@@ -60,6 +60,11 @@ class UserProjectionServiceTest {
                 userId, name, ProjectionKind.PROJECTION, null, sampleData(), PlayerIdSpace.YAHOO);
     }
 
+    private UserProjection rename(UserProjection projection, String name) {
+        return userProjectionService.update(userId, projection.getId(), name,
+                new UpdateProjectionData(sampleData().settings(), null, null, null));
+    }
+
     @Test
     void createsAndFindsProjection() {
         UserProjection created = create("My league");
@@ -98,15 +103,61 @@ class UserProjectionServiceTest {
     }
 
     @Test
-    void enforcesUniqueNamePerUserAndKind() {
-        userProjectionRepository.saveAndFlush(UserProjection.create(
-                userId, "Dynasty", ProjectionKind.PROJECTION, null, Season.SEASON_2026_2027, sampleData(),
-                PlayerIdSpace.YAHOO));
+    void enforcesUniqueNamePerUser() {
+        create("Dynasty");
 
-        assertThatThrownBy(() -> userProjectionRepository.saveAndFlush(UserProjection.create(
-                userId, "Dynasty", ProjectionKind.PROJECTION, null, Season.SEASON_2026_2027, sampleData(),
-                PlayerIdSpace.YAHOO)))
+        assertThatThrownBy(() -> create("Dynasty"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("Dynasty");
+    }
+
+    /**
+     * The two kinds a user names share one namespace. They are listed together and read by name,
+     * so a projection and an imported board under the same name are told apart only by the
+     * smaller line beneath them — which is what this rule exists to prevent.
+     */
+    @Test
+    void enforcesUniqueNameAcrossOwnProjectionsAndImportedBoards() {
+        create("Erik's board");
+
+        assertThatThrownBy(() -> userProjectionService.create(
+                userId, "Erik's board", ProjectionKind.IMPORTED, null, sampleData(), PlayerIdSpace.YAHOO))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void enforcesUniqueNameWhenAProjectionIsRenamed() {
+        create("First");
+        UserProjection second = create("Second");
+
+        assertThatThrownBy(() -> rename(second, "First"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    /** Its own name is not a conflict, or nothing could be saved twice. */
+    @Test
+    void letsAProjectionKeepItsOwnNameOnUpdate() {
+        UserProjection projection = create("Steady");
+
+        UserProjection saved = rename(projection, "Steady");
+
+        assertThat(saved.getName()).isEqualTo("Steady");
+    }
+
+    /**
+     * A preset draft is named by the server after its preset and listed as nobody's own work, so
+     * it is outside the namespace in both directions: it may not block a user's name, and saving
+     * its picks may not be refused because the user took one.
+     */
+    @Test
+    void letsAPresetDraftKeepItsNameBesideAProjectionUsingIt() {
+        userProjectionService.create(userId, "AI Projection", ProjectionKind.PRESET_DRAFT,
+                ProjectionPreset.MODEL, sampleData(), PlayerIdSpace.YAHOO);
+
+        UserProjection own = create("AI Projection");
+
+        assertThat(own.getId()).isNotNull();
+        assertThat(userProjectionService.findAll(userId)).hasSize(2);
     }
 
     /**
@@ -137,7 +188,7 @@ class UserProjectionServiceTest {
     /**
      * A user may keep as many projections as they like — one started from a copy of another is
      * the point of allowing it. What still tells two apart is the name, which
-     * {@link #enforcesUniqueNamePerUserAndKind()} covers.
+     * {@link #enforcesUniqueNamePerUser()} covers.
      */
     @Test
     void allowsASecondProjectionForTheSameUser() {

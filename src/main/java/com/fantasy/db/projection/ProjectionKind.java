@@ -32,7 +32,10 @@ public enum ProjectionKind {
      * <p>The other two are unlimited. Imported boards always were — there is no reason to be able
      * to draft against one friend's numbers but not two — and a user's own work no longer is
      * either, now that a projection can be started from a copy of another one and kept beside it.
-     * What still keeps two of them apart is the name: {@code (user_id, kind, name)} is unique.
+     * What still keeps two of them apart is the name, and the two share one namespace: they are
+     * listed together and read by name, so {@code (user_id, name)} is unique across both. A
+     * preset draft is outside that namespace, being named by the server and listed as nobody's
+     * work — see V19 and {@code UserProjectionService.requireFreeName}.
      */
     public boolean isUniquePerUser() {
         return this == PRESET_DRAFT;
