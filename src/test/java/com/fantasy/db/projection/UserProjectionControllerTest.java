@@ -106,7 +106,8 @@ class UserProjectionControllerTest {
                         List.of("gp"), Map.of(), Map.of("goals", 0), true, 12, null, null, null, null, null, null, null),
                 List.of(new PlayerProjection(1, PlayerType.SKATER,
                         new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)))),
-                draft);
+                draft,
+                null);
         return new UserProjection(PROJECTION_ID, USER_ID, name, kind, null, Season.SEASON_2026_2027, data,
                 null, null, Instant.now(), Instant.now());
     }

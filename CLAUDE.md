@@ -82,6 +82,12 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     `playerPoolSyncedAt` (the sync run they were last squared with). The player pool
     changes under a saved projection all season, and the BFF is the one that can see it,
     so it reconciles the rows and writes both fields back; here they are just jsonb.
+    `positionOverrides` (`List<PositionOverride>`) holds the positions the owner set by
+    hand for individual skaters, because the platforms disagree about who is eligible
+    where. It replaces on update — an empty list is how the app resets everyone back to
+    the read model's positions — and `PlayerIdRemapService` remaps its ids along with the
+    rest, since an override left on the old id would attach to whoever the new space
+    numbers that way.
   - `Season` / `ScoringType` / `PlayerType` / `ProjectionKind` / `PlayerBasis` — enums with
     `@JsonValue` codes (`20262027`, `points`, `skater`, `preset_draft`, `last_season`).
   - `UserProjectionRepository` / `UserProjectionService` — CRUD scoped to the owning

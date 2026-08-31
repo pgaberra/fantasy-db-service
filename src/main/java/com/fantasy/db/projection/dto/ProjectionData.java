@@ -15,5 +15,7 @@ public record ProjectionData(
                         + "full board is every player in the league.")
         @NotNull @Valid @Size(max = 2000) List<PlayerProjection> players,
         @Schema(description = "In-draft state for this projection — the league's teams, the snake draft order, and the picks made so far (each attributed to a team) in pick order. Absent until a draft is configured.")
-        @Valid DraftState draft
+        @Valid DraftState draft,
+        @Schema(description = "Positions the owner set by hand, replacing what the player read model reports for that skater. One entry per corrected player; absent or empty means every player keeps its reported positions. The cap matches the player list.")
+        @Valid @Size(max = 2000) List<PositionOverride> positionOverrides
 ) {}

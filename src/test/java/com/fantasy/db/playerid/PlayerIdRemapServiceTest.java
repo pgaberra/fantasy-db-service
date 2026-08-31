@@ -8,6 +8,7 @@ import com.fantasy.db.projection.PlayerIdSpace;
 import com.fantasy.db.projection.PlayerType;
 import com.fantasy.db.projection.ProjectionKind;
 import com.fantasy.db.projection.ScoringType;
+import com.fantasy.db.projection.SkaterPosition;
 import com.fantasy.db.projection.Season;
 import com.fantasy.db.projection.UserProjection;
 import com.fantasy.db.projection.UserProjectionRepository;
@@ -16,6 +17,7 @@ import com.fantasy.db.projection.dto.DraftState;
 import com.fantasy.db.projection.dto.DraftTeam;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
+import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
 import com.fantasy.db.share.ProjectionShare;
@@ -73,13 +75,19 @@ class PlayerIdRemapServiceTest {
     }
 
     private UserProjection storeProjection(DraftState draft, int... playerIds) {
+        return storeProjection(draft, null, playerIds);
+    }
+
+    private UserProjection storeProjection(DraftState draft, List<PositionOverride> overrides,
+                                           int... playerIds) {
         List<PlayerProjection> players = new java.util.ArrayList<>();
         for (int playerId : playerIds) {
             players.add(new PlayerProjection(playerId, PlayerType.SKATER, stats()));
         }
         return projectionRepository.save(UserProjection.create(
                 UUID.randomUUID(), "League " + UUID.randomUUID(), ProjectionKind.PROJECTION, null,
-                Season.fromCode("20262027"), new ProjectionData(settings(), players, draft),
+                Season.fromCode("20262027"),
+                new ProjectionData(settings(), players, draft, overrides),
                 PlayerIdSpace.YAHOO));
     }
 
@@ -152,6 +160,39 @@ class PlayerIdRemapServiceTest {
         PlayerIdRemapResponse response = remapService.remap(request(true, mcDavid()));
 
         assertThat(response.sharedRows().remapped()).isEqualTo(1);
+    }
+
+    /**
+     * An override is keyed by player id like everything else, so leaving it behind would either
+     * detach it from the player it was written for or, worse, land it on whoever ESPN happens to
+     * number with the id Yahoo used.
+     */
+    @Test
+    void remapsPositionOverrides() {
+        UserProjection projection = storeProjection(null,
+                List.of(new PositionOverride(YAHOO_MCDAVID,
+                        List.of(SkaterPosition.C, SkaterPosition.LW))),
+                YAHOO_MCDAVID);
+
+        PlayerIdRemapResponse response = remapService.remap(request(false, mcDavid()));
+
+        assertThat(response.positionOverrides().remapped()).isEqualTo(1);
+        ProjectionData stored = projectionRepository.findById(projection.getId()).orElseThrow().getData();
+        assertThat(stored.positionOverrides()).containsExactly(
+                new PositionOverride(ESPN_MCDAVID, List.of(SkaterPosition.C, SkaterPosition.LW)));
+    }
+
+    @Test
+    void leavesAnOverrideTheCrosswalkDoesNotCover() {
+        UserProjection projection = storeProjection(null,
+                List.of(new PositionOverride(YAHOO_UNKNOWN, List.of(SkaterPosition.D))),
+                YAHOO_MCDAVID);
+
+        PlayerIdRemapResponse response = remapService.remap(request(false, mcDavid()));
+
+        assertThat(response.positionOverrides().unmapped()).isEqualTo(1);
+        ProjectionData stored = projectionRepository.findById(projection.getId()).orElseThrow().getData();
+        assertThat(stored.positionOverrides().getFirst().playerId()).isEqualTo(YAHOO_UNKNOWN);
     }
 
     /** Everything else on the row is the user's work and must come back untouched. */

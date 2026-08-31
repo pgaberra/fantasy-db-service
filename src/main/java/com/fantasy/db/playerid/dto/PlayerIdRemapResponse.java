@@ -15,6 +15,10 @@ public record PlayerIdRemapResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int projectionsScanned,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) RemapCounts playerRows,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) RemapCounts draftPicks,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "The positions an owner corrected by hand; an unmapped one stops "
+                        + "reaching the player it was written for")
+        RemapCounts positionOverrides,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int sharesScanned,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
                 description = "The rows a share published — what its public page shows and what "

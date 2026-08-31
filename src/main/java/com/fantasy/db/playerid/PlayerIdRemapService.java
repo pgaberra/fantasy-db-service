@@ -10,6 +10,7 @@ import com.fantasy.db.projection.UserProjectionRepository;
 import com.fantasy.db.projection.dto.DraftPick;
 import com.fantasy.db.projection.dto.DraftState;
 import com.fantasy.db.projection.dto.PlayerProjection;
+import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.share.ProjectionShare;
 import com.fantasy.db.share.ProjectionShareRepository;
@@ -84,6 +85,7 @@ public class PlayerIdRemapService {
                 projections.size(),
                 new RemapCounts(tally.playerRowsRemapped, tally.playerRowsUnmapped),
                 new RemapCounts(tally.draftPicksRemapped, tally.draftPicksUnmapped),
+                new RemapCounts(tally.positionOverridesRemapped, tally.positionOverridesUnmapped),
                 shares.size(),
                 new RemapCounts(tally.sharedRowsRemapped, tally.sharedRowsUnmapped),
                 tally.unmappedSample());
@@ -91,7 +93,8 @@ public class PlayerIdRemapService {
                         + "picks remapped, {} rows left on an id the crosswalk did not cover",
                 dryRun ? "dry run" : "applied", projections.size(), shares.size(),
                 tally.playerRowsRemapped, tally.draftPicksRemapped,
-                tally.playerRowsUnmapped + tally.draftPicksUnmapped + tally.sharedRowsUnmapped);
+                tally.playerRowsUnmapped + tally.draftPicksUnmapped + tally.sharedRowsUnmapped
+                        + tally.positionOverridesUnmapped);
         return response;
     }
 
@@ -119,7 +122,24 @@ public class PlayerIdRemapService {
                     ? player
                     : new PlayerProjection(mapped, player.type(), player.stats()));
         }
-        return new ProjectionData(data.settings(), players, remap(data.draft(), crosswalk, tally));
+        return new ProjectionData(data.settings(), players, remap(data.draft(), crosswalk, tally),
+                remapOverrides(data.positionOverrides(), crosswalk, tally));
+    }
+
+    private List<PositionOverride> remapOverrides(List<PositionOverride> overrides,
+                                                  Map<Integer, Integer> crosswalk, Tally tally) {
+        if (overrides == null) {
+            return null;
+        }
+        List<PositionOverride> remapped = new ArrayList<>(overrides.size());
+        for (PositionOverride override : overrides) {
+            Integer mapped = crosswalk.get(override.playerId());
+            tally.positionOverride(mapped != null, override.playerId());
+            remapped.add(mapped == null
+                    ? override
+                    : new PositionOverride(mapped, override.positions()));
+        }
+        return remapped;
     }
 
     private DraftState remap(DraftState draft, Map<Integer, Integer> crosswalk, Tally tally) {
@@ -159,6 +179,8 @@ public class PlayerIdRemapService {
         private int draftPicksUnmapped;
         private int sharedRowsRemapped;
         private int sharedRowsUnmapped;
+        private int positionOverridesRemapped;
+        private int positionOverridesUnmapped;
         private final TreeSet<Integer> unmapped = new TreeSet<>();
 
         void player(boolean mapped, int playerId) {
@@ -175,6 +197,15 @@ public class PlayerIdRemapService {
                 draftPicksRemapped++;
             } else {
                 draftPicksUnmapped++;
+                unmapped.add(playerId);
+            }
+        }
+
+        void positionOverride(boolean mapped, int playerId) {
+            if (mapped) {
+                positionOverridesRemapped++;
+            } else {
+                positionOverridesUnmapped++;
                 unmapped.add(playerId);
             }
         }
