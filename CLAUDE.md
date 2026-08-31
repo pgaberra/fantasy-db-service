@@ -84,8 +84,9 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     so it reconciles the rows and writes both fields back; here they are just jsonb.
     `positionOverrides` (`List<PositionOverride>`) holds the positions the owner set by
     hand for individual skaters, because the platforms disagree about who is eligible
-    where. It replaces on update — an empty list is how the app resets everyone back to
-    the read model's positions — and `PlayerIdRemapService` remaps its ids along with the
+    where. It is keep-if-absent on update like the player rows, since several save paths
+    send neither — an empty list, not a missing one, is how the app resets everyone back
+    to the read model's positions — and `PlayerIdRemapService` remaps its ids along with the
     rest, since an override left on the old id would attach to whoever the new space
     numbers that way.
   - `Season` / `ScoringType` / `PlayerType` / `ProjectionKind` / `PlayerBasis` — enums with

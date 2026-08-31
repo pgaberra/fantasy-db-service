@@ -1,6 +1,7 @@
 package com.fantasy.db.projection;
 
 import com.fantasy.db.projection.dto.PlayerProjection;
+import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.UpdateProjectionData;
 import org.springframework.beans.factory.annotation.Value;
@@ -67,7 +68,13 @@ public class UserProjectionService {
      * rather than in the caller keeps the read and the write inside one transaction, so two
      * concurrent updates cannot interleave into a projection that is half old and half new.
      *
-     * <p><b>An empty list counts as omitted.</b> A projection covers every player in the league,
+     * <p>The overrides are kept the same way, and for a different reason: draft mode and the
+     * clear-draft path both send an update built from the settings alone, and neither has any
+     * business clearing the positions their owner corrected. An <b>empty</b> list is the one
+     * thing that does clear them, since that is the app resetting every player back to the read
+     * model.
+     *
+     * <p><b>An empty player list counts as omitted.</b> A projection covers every player in the league,
      * so there is no such thing as one with no rows, and nothing can ask for that on purpose.
      * Meanwhile a caller easily sends one by accident: the BFF's OpenAPI-generated request model
      * initialises the field to an empty {@code ArrayList}, so a body that leaves {@code players}
@@ -81,8 +88,11 @@ public class UserProjectionService {
         List<PlayerProjection> players = incomingPlayers == null || incomingPlayers.isEmpty()
                 ? projection.getData().players()
                 : incomingPlayers;
+        List<PositionOverride> overrides = incoming.positionOverrides() == null
+                ? projection.getData().positionOverrides()
+                : incoming.positionOverrides();
         projection.update(name, new ProjectionData(incoming.settings(), players, incoming.draft(),
-                incoming.positionOverrides()));
+                overrides));
         return userProjectionRepository.save(projection);
     }
 

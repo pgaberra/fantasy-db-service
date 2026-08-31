@@ -274,6 +274,24 @@ class UserProjectionServiceTest {
         assertThat(reset.getData().positionOverrides()).isEmpty();
     }
 
+    /**
+     * Draft mode and the clear-draft path both save settings and nothing else. Reading that as
+     * "no overrides" would delete work neither of them knows exists.
+     */
+    @Test
+    void omittedPositionOverridesKeepTheStoredOnes() {
+        UserProjection created = create("Old");
+        userProjectionService.update(userId, created.getId(), "Old",
+                new UpdateProjectionData(sampleData().settings(), null, null,
+                        List.of(new PositionOverride(1, List.of(SkaterPosition.D)))));
+
+        UserProjection updated = userProjectionService.update(userId, created.getId(), "Old",
+                new UpdateProjectionData(sampleData().settings(), null, null, null));
+
+        assertThat(updated.getData().positionOverrides())
+                .containsExactly(new PositionOverride(1, List.of(SkaterPosition.D)));
+    }
+
     @Test
     void deleteRemovesProjection() {
         UserProjection created = create("Temp");
