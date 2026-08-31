@@ -76,7 +76,7 @@ class ProjectionShareServiceTest {
                 Instant.parse("2026-08-16T04:00:00Z"));
         PlayerProjection mcDavid = new PlayerProjection(
                 1, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)));
-        return new ProjectionData(settings, List.of(mcDavid), null);
+        return new ProjectionData(settings, List.of(mcDavid), null, null);
     }
 
     private static List<SharedPlayer> sharedPlayers(String topName) {

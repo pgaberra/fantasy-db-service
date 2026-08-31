@@ -3,6 +3,7 @@ package com.fantasy.db.projection.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
@@ -16,9 +17,9 @@ import java.util.List;
  * picks) do not touch them. Sending them on every autosave made saving depend on an upload that
  * was failing outright for users on a slow connection.
  *
- * <p>{@code settings} and {@code draft} keep the ordinary replace semantics: what you send is
- * what is stored, and an omitted {@code draft} still clears it. Only {@code players} is
- * keep-if-absent, so a partial update can never silently drop something small.
+ * <p>{@code settings}, {@code draft} and {@code positionOverrides} keep the ordinary replace
+ * semantics: what you send is what is stored, and omitting one still clears it. Only
+ * {@code players} is keep-if-absent, so a partial update can never silently drop something small.
  */
 public record UpdateProjectionData(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @NotNull @Valid ProjectionSettings settings,
@@ -28,5 +29,7 @@ public record UpdateProjectionData(
                 + "there is no way to ask for none.")
         @Valid List<PlayerProjection> players,
         @Schema(description = "In-draft state for this projection. Replaced on every update — omit it to clear.")
-        @Valid DraftState draft
+        @Valid DraftState draft,
+        @Schema(description = "Positions the owner set by hand. Replaced on every update — send an empty list, or omit it, to put every player back on the positions the read model reports.")
+        @Valid @Size(max = 2000) List<PositionOverride> positionOverrides
 ) {}

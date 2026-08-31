@@ -54,6 +54,7 @@ class ProjectionImportControllerTest {
                         null, null, null),
                 List.of(new PlayerProjection(1, PlayerType.SKATER,
                         new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)))),
+                null,
                 null);
         return new UserProjection(PROJECTION_ID, USER_ID, "My league", ProjectionKind.IMPORTED,
                 null, Season.SEASON_2026_2027, data, "s0mErAnd0mT0k3nV4lu3ab", "alex",

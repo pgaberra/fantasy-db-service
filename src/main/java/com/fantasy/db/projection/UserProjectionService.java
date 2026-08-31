@@ -81,7 +81,8 @@ public class UserProjectionService {
         List<PlayerProjection> players = incomingPlayers == null || incomingPlayers.isEmpty()
                 ? projection.getData().players()
                 : incomingPlayers;
-        projection.update(name, new ProjectionData(incoming.settings(), players, incoming.draft()));
+        projection.update(name, new ProjectionData(incoming.settings(), players, incoming.draft(),
+                incoming.positionOverrides()));
         return userProjectionRepository.save(projection);
     }
 

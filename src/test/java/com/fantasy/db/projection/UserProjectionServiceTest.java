@@ -2,6 +2,7 @@ package com.fantasy.db.projection;
 
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
+import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
 import com.fantasy.db.projection.dto.UpdateProjectionData;
@@ -51,7 +52,7 @@ class UserProjectionServiceTest {
                 Instant.parse("2026-08-16T04:00:00Z"));
         PlayerProjection mcDavid = new PlayerProjection(
                 1, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)));
-        return new ProjectionData(settings, List.of(mcDavid), null);
+        return new ProjectionData(settings, List.of(mcDavid), null, null);
     }
 
     private UserProjection create(String name) {
@@ -202,6 +203,7 @@ class UserProjectionServiceTest {
                 sampleData().settings(),
                 List.of(new PlayerProjection(
                         2, PlayerType.GOALIE, new PlayerStats(Map.of("gp", 60.0), Map.of("w", 40.0)))),
+                null,
                 null);
         UserProjection updated = userProjectionService.update(userId, created.getId(), "New", newData);
 
@@ -219,7 +221,7 @@ class UserProjectionServiceTest {
         ProjectionSettings changedSettings = sampleData().settings();
 
         UserProjection updated = userProjectionService.update(userId, created.getId(), "New",
-                new UpdateProjectionData(changedSettings, null, null));
+                new UpdateProjectionData(changedSettings, null, null, null));
 
         assertThat(updated.getName()).isEqualTo("New");
         assertThat(updated.getData().players()).isEqualTo(sampleData().players());
@@ -237,9 +239,39 @@ class UserProjectionServiceTest {
         UserProjection created = create("Old");
 
         UserProjection updated = userProjectionService.update(userId, created.getId(), "New",
-                new UpdateProjectionData(sampleData().settings(), List.of(), null));
+                new UpdateProjectionData(sampleData().settings(), List.of(), null, null));
 
         assertThat(updated.getData().players()).isEqualTo(sampleData().players());
+    }
+
+    @Test
+    void storesPositionOverrides() {
+        UserProjection created = create("Old");
+
+        UserProjection updated = userProjectionService.update(userId, created.getId(), "Old",
+                new UpdateProjectionData(sampleData().settings(), null, null,
+                        List.of(new PositionOverride(1, List.of(SkaterPosition.LW, SkaterPosition.RW)))));
+
+        assertThat(updated.getData().positionOverrides())
+                .containsExactly(new PositionOverride(1, List.of(SkaterPosition.LW, SkaterPosition.RW)));
+    }
+
+    /**
+     * Resetting every player back to the positions the read model reports is an update that sends
+     * no overrides, so an empty list has to clear the stored ones rather than be read as "leave
+     * them alone" the way an empty player list is.
+     */
+    @Test
+    void emptyPositionOverridesClearTheStoredOnes() {
+        UserProjection created = create("Old");
+        userProjectionService.update(userId, created.getId(), "Old",
+                new UpdateProjectionData(sampleData().settings(), null, null,
+                        List.of(new PositionOverride(1, List.of(SkaterPosition.D)))));
+
+        UserProjection reset = userProjectionService.update(userId, created.getId(), "Old",
+                new UpdateProjectionData(sampleData().settings(), null, null, List.of()));
+
+        assertThat(reset.getData().positionOverrides()).isEmpty();
     }
 
     @Test

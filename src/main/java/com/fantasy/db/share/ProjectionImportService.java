@@ -43,6 +43,10 @@ public class ProjectionImportService {
      * inherit their draft. The season comes from the share for the same reason the rows do —
      * they are that season's numbers whatever season it is now.
      *
+     * <p>The copy also starts with no position overrides. The author corrected those against the
+     * platform their league runs on, which is not necessarily the importer's, and the importer's
+     * own player pool already says which positions each player is eligible for.
+     *
      * <p>Flushed rather than left to the commit so that a name the importer already used surfaces
      * here as a conflict, inside the boundary that maps it to a 409, rather than out of the
      * transaction after the handler has returned.
@@ -55,7 +59,7 @@ public class ProjectionImportService {
                 .map(User::getUsername)
                 .orElseThrow(() -> new NoSuchElementException("No user found for that share"));
         ProjectionData data = new ProjectionData(
-                share.getData().settings(), boardOf(share), null);
+                share.getData().settings(), boardOf(share), null, null);
 
         return userProjectionRepository.saveAndFlush(UserProjection.importedFrom(
                 userId,

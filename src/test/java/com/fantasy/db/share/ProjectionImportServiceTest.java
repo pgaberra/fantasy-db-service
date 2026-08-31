@@ -81,6 +81,7 @@ class ProjectionImportServiceTest {
                         new PlayerStats(Map.of("gp", 80.0), Map.of("goals", 51.0))),
                 new PlayerProjection(3, PlayerType.GOALIE,
                         new PlayerStats(Map.of("gp", 60.0), Map.of("wins", 38.0)))),
+                null,
                 null);
     }
 
