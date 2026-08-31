@@ -167,7 +167,8 @@ public class PlayerIdRemapService {
                             player.headshot(), player.positions(), player.type(), player.rank(),
                             player.value(), player.stats()));
         }
-        return new SharedProjectionData(data.settings(), players);
+        return new SharedProjectionData(data.settings(), players,
+                remapOverrides(data.positionOverrides(), crosswalk, tally));
     }
 
 

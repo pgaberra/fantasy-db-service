@@ -48,9 +48,12 @@ public class ProjectionImportService {
      * inherit their draft. The season comes from the share for the same reason the rows do —
      * they are that season's numbers whatever season it is now.
      *
-     * <p>The copy also starts with no position overrides. The author corrected those against the
-     * platform their league runs on, which is not necessarily the importer's, and the importer's
-     * own player pool already says which positions each player is eligible for.
+     * <p>The author's position corrections do come with it. They are part of the board being
+     * copied: the ranking was computed against those positions, and a copy that quietly moved
+     * players back onto the read model's would rank differently from the page it was copied from.
+     * The importer can undo any of them, or all of them at once, the same way the author made
+     * them. A share published before shares carried the corrections has none, and the copy then
+     * starts on the reported positions as it always did.
      *
      * <p>The name is held to the same rule a projection's own is, and against the same list: a
      * copy lands in the list beside the importer's own boards, so it may not arrive under a name
@@ -66,7 +69,8 @@ public class ProjectionImportService {
                 .map(User::getUsername)
                 .orElseThrow(() -> new NoSuchElementException("No user found for that share"));
         ProjectionData data = new ProjectionData(
-                share.getData().settings(), boardOf(share), null, null);
+                share.getData().settings(), boardOf(share), null,
+                share.getData().positionOverrides());
         String copyName = name == null || name.isBlank() ? share.getName() : name.trim();
         userProjectionService.requireFreeName(userId, copyName, ProjectionKind.IMPORTED, null);
 
