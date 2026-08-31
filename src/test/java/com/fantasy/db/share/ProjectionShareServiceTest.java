@@ -5,6 +5,7 @@ import com.fantasy.db.projection.PlayerIdSpace;
 import com.fantasy.db.projection.PlayerType;
 import com.fantasy.db.projection.ProjectionKind;
 import com.fantasy.db.projection.ScoringType;
+import com.fantasy.db.projection.SkaterPosition;
 import com.fantasy.db.projection.Season;
 import com.fantasy.db.projection.UserProjection;
 import com.fantasy.db.projection.UserProjectionService;
@@ -13,6 +14,7 @@ import com.fantasy.db.user.UserRepository;
 import com.fantasy.db.projection.dto.EspnSync;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
+import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
 import com.fantasy.db.projection.dto.YahooSync;
@@ -76,7 +78,8 @@ class ProjectionShareServiceTest {
                 Instant.parse("2026-08-16T04:00:00Z"));
         PlayerProjection mcDavid = new PlayerProjection(
                 1, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)));
-        return new ProjectionData(settings, List.of(mcDavid), null, null);
+        return new ProjectionData(settings, List.of(mcDavid), null,
+                List.of(new PositionOverride(1, List.of(SkaterPosition.C, SkaterPosition.LW))));
     }
 
     private static List<SharedPlayer> sharedPlayers(String topName) {
@@ -185,6 +188,21 @@ class ProjectionShareServiceTest {
      * and what an import copies, so storing the projection's own rows beside them would be the
      * same board twice.
      */
+    /**
+     * Taken from the stored projection rather than the caller, like the settings: what a link
+     * publishes has to be the projection it points at, and an import reads these to inherit them.
+     */
+    @Test
+    void copiesThePositionsTheOwnerCorrected() {
+        UserProjection projection = projection();
+
+        ProjectionShare share = projectionShareService.share(
+                userId, projection.getId(), sharedPlayers("Connor McDavid"));
+
+        assertThat(share.getData().positionOverrides()).containsExactly(
+                new PositionOverride(1, List.of(SkaterPosition.C, SkaterPosition.LW)));
+    }
+
     @Test
     void storesOnlyTheRowsItWasGiven() {
         UserProjection projection = projection();

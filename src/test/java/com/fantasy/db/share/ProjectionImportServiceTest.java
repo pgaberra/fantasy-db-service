@@ -5,12 +5,14 @@ import com.fantasy.db.projection.PlayerIdSpace;
 import com.fantasy.db.projection.PlayerType;
 import com.fantasy.db.projection.ProjectionKind;
 import com.fantasy.db.projection.ScoringType;
+import com.fantasy.db.projection.SkaterPosition;
 import com.fantasy.db.projection.Season;
 import com.fantasy.db.projection.UserProjection;
 import com.fantasy.db.projection.UserProjectionService;
 import com.fantasy.db.projection.dto.EspnSync;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
+import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
 import com.fantasy.db.projection.dto.YahooSync;
@@ -58,6 +60,11 @@ class ProjectionImportServiceTest {
     }
 
     private static ProjectionData projectionData() {
+        return projectionData(List.of(new PositionOverride(2, List.of(SkaterPosition.LW,
+                SkaterPosition.RW))));
+    }
+
+    private static ProjectionData projectionData(List<PositionOverride> overrides) {
         ProjectionSettings settings = new ProjectionSettings(
                 ScoringType.POINTS,
                 Map.of("goals", 4.5, "assists", 3.0),
@@ -82,7 +89,7 @@ class ProjectionImportServiceTest {
                 new PlayerProjection(3, PlayerType.GOALIE,
                         new PlayerStats(Map.of("gp", 60.0), Map.of("wins", 38.0)))),
                 null,
-                null);
+                overrides);
     }
 
     /** What a share publishes: the whole ranking, which is also what an import copies. */
@@ -108,12 +115,16 @@ class ProjectionImportServiceTest {
      * boards means anyway.
      */
     private String share(String name) {
+        return share(name, projectionData());
+    }
+
+    private String share(String name, ProjectionData data) {
         String handle = "alex" + authorCount++;
         User author = userRepository.save(User.create(handle + "@example.com", "hash"));
         author.updateUsername(handle);
         UUID authorId = userRepository.save(author).getId();
         UserProjection projection = userProjectionService.create(
-                authorId, name, ProjectionKind.PROJECTION, null, projectionData(), PlayerIdSpace.YAHOO);
+                authorId, name, ProjectionKind.PROJECTION, null, data, PlayerIdSpace.YAHOO);
         return projectionShareService.share(authorId, projection.getId(), publishedRows()).getToken();
     }
 
@@ -179,6 +190,31 @@ class ProjectionImportServiceTest {
         assertThat(imported.getData().settings().yahooSync()).isNull();
         assertThat(imported.getData().settings().espnSync()).isNull();
         assertThat(imported.getData().settings().lastEspnLeagueId()).isNull();
+    }
+
+    /**
+     * The corrections are part of the board: the ranking on the page was computed against those
+     * positions, so a copy that put players back on the read model's would rank differently from
+     * what the importer clicked on.
+     */
+    @Test
+    void inheritsThePositionsTheAuthorCorrected() {
+        String token = share("My league");
+
+        UserProjection imported = projectionImportService.importFrom(readerId, token, null);
+
+        assertThat(imported.getData().positionOverrides()).containsExactly(
+                new PositionOverride(2, List.of(SkaterPosition.LW, SkaterPosition.RW)));
+    }
+
+    /** Links published before shares carried the corrections still import, with none of them. */
+    @Test
+    void importsAShareThatCarriesNoCorrections() {
+        String token = share("Older board", projectionData(null));
+
+        UserProjection imported = projectionImportService.importFrom(readerId, token, null);
+
+        assertThat(imported.getData().positionOverrides()).isNull();
     }
 
     @Test

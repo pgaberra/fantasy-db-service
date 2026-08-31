@@ -31,8 +31,8 @@ public class ProjectionShareService {
 
     /**
      * Publishes a projection, once. The rows come from the caller, which owns the ranking; the
-     * settings, name and season are copied from the stored projection so a client cannot publish
-     * a page that misrepresents the projection it points at.
+     * settings, name, season and position corrections are copied from the stored projection so a
+     * client cannot publish a page that misrepresents the projection it points at.
      *
      * <p>A projection that is already shared keeps the share it has, untouched — there is no way
      * to refresh or withdraw a published snapshot. Deleting the projection deletes the share with
@@ -49,8 +49,10 @@ public class ProjectionShareService {
         }
         UserProjection projection = userProjectionRepository.findByIdAndUserId(projectionId, userId)
                 .orElseThrow(() -> new NoSuchElementException("No projection found with id: " + projectionId));
-        SharedProjectionData data =
-                new SharedProjectionData(publishable(projection.getData().settings()), players);
+        SharedProjectionData data = new SharedProjectionData(
+                publishable(projection.getData().settings()),
+                players,
+                projection.getData().positionOverrides());
 
         return projectionShareRepository.findByProjectionIdAndUserId(projectionId, userId)
                 .orElseGet(() -> projectionShareRepository.save(ProjectionShare.create(

@@ -83,7 +83,7 @@ class ProjectionShareControllerTest {
                 "s0mErAnd0mT0k3nV4lu3ab",
                 "My league",
                 Season.SEASON_2026_2027,
-                new SharedProjectionData(settings, List.of(mcDavid)),
+                new SharedProjectionData(settings, List.of(mcDavid), null),
                 Instant.parse("2026-08-01T10:00:00Z"),
                 Instant.parse("2026-08-02T10:00:00Z"));
     }

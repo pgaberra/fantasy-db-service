@@ -101,11 +101,15 @@ class PlayerIdRemapServiceTest {
     }
 
     private ProjectionShare storeShare(int playerId) {
+        return storeShare(playerId, null);
+    }
+
+    private ProjectionShare storeShare(int playerId, List<PositionOverride> overrides) {
         return shareRepository.save(ProjectionShare.create(
                 UUID.randomUUID(), UUID.randomUUID(), "Shared", Season.fromCode("20262027"),
                 new SharedProjectionData(settings(), List.of(new SharedPlayer(
                         playerId, "Connor McDavid", "EDM", null, List.of("C"), PlayerType.SKATER,
-                        1, 512.5, stats())))));
+                        1, 512.5, stats())), overrides)));
     }
 
     private static PlayerIdRemapRequest request(boolean dryRun, PlayerIdPair... mappings) {
@@ -180,6 +184,19 @@ class PlayerIdRemapServiceTest {
         ProjectionData stored = projectionRepository.findById(projection.getId()).orElseThrow().getData();
         assertThat(stored.positionOverrides()).containsExactly(
                 new PositionOverride(ESPN_MCDAVID, List.of(SkaterPosition.C, SkaterPosition.LW)));
+    }
+
+    /** A share carries the author's corrections so an import can inherit them, ids and all. */
+    @Test
+    void remapsThePositionsCarriedOnAShare() {
+        ProjectionShare share = storeShare(YAHOO_MCDAVID,
+                List.of(new PositionOverride(YAHOO_MCDAVID, List.of(SkaterPosition.C))));
+
+        remapService.remap(request(false, mcDavid()));
+
+        ProjectionShare stored = shareRepository.findById(share.getId()).orElseThrow();
+        assertThat(stored.getData().positionOverrides()).containsExactly(
+                new PositionOverride(ESPN_MCDAVID, List.of(SkaterPosition.C)));
     }
 
     @Test

@@ -115,17 +115,24 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     share it has, untouched, and there is no endpoint to refresh or withdraw one. Deleting the
     projection deletes the share with it (the row cascades) — that is the only thing that takes
     a link down.
-  - `ProjectionShareService` — copies name, season and settings from the stored projection so a
-    client cannot publish a page that misrepresents it, and **strips `yahooSync`**: the owner's
-    league name and key have no business on a public page. The ranked rows come from the caller,
-    which owns the ranking, and carry denormalised identity (name, team, positions) so the public
-    page renders without the player read model.
+  - `ProjectionShareService` — copies name, season, settings and `positionOverrides` from the
+    stored projection so a client cannot publish a page that misrepresents it, and **strips
+    `yahooSync`**: the owner's league name and key have no business on a public page. The ranked
+    rows come from the caller, which owns the ranking, and carry denormalised identity (name,
+    team, positions) so the public page renders without the player read model. The overrides
+    travel *as well as* those positions, which already reflect them: the page renders off the
+    rows, while an import needs to tell a correction from a position the read model reported,
+    and a row cannot say which it is.
   - `ProjectionImportService` / `ProjectionImportController` —
     `POST /api/v1/users/{userId}/projections/imports`, which copies a share into the caller's
     own projections by its token. Anyone holding a token may import; the copy is of the frozen
     snapshot rather than the live projection behind it, because that snapshot is what the owner
     consented to publish. It carries no draft (the author's picks were theirs) and takes its
-    season from the share, since the rows are that season's numbers.
+    season from the share, since the rows are that season's numbers. It **does** inherit the
+    author's `positionOverrides`: the published ranking was computed against those positions, so
+    a copy that moved players back onto the read model's would rank differently from the page it
+    was copied from. The importer can undo them like any of their own. A link published before
+    shares carried them inherits none, and starts on the reported positions.
   - `ProjectionShareController` — `/api/v1/users/{userId}/projections/{projectionId}/share`
     (get/put/delete, ownership-scoped). `SharedProjectionController` —
     `GET /api/v1/shares/{token}`, the snapshot the BFF serves publicly; it returns no owner
