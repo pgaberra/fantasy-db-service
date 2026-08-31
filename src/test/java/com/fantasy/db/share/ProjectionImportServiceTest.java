@@ -232,6 +232,34 @@ class ProjectionImportServiceTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    /**
+     * The bug this rule was written for: a copy landed in the same list as the importer's own
+     * boards, under a name one of them already had, and the two were told apart only by the
+     * smaller line under them.
+     */
+    @Test
+    void refusesAnImportUnderTheNameOfTheImportersOwnProjection() {
+        userProjectionService.create(readerId, "My Projection 3", ProjectionKind.PROJECTION, null,
+                projectionData(), PlayerIdSpace.YAHOO);
+        String token = share("My Projection 3");
+
+        assertThatThrownBy(() -> projectionImportService.importFrom(readerId, token, null))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    /** And the way out of it the importer is offered: name the copy something free. */
+    @Test
+    void acceptsThatImportUnderAFreeName() {
+        userProjectionService.create(readerId, "My Projection 3", ProjectionKind.PROJECTION, null,
+                projectionData(), PlayerIdSpace.YAHOO);
+        String token = share("My Projection 3");
+
+        UserProjection copy = projectionImportService.importFrom(readerId, token, "Erik's board");
+
+        assertThat(copy.getName()).isEqualTo("Erik's board");
+        assertThat(copy.getKind()).isEqualTo(ProjectionKind.IMPORTED);
+    }
+
     @Test
     void refusesATokenThatIsNotAShare() {
         assertThatThrownBy(() -> projectionImportService.importFrom(readerId, "n0tAT0k3n", null))

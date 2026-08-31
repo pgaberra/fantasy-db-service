@@ -14,5 +14,16 @@ public interface UserProjectionRepository extends JpaRepository<UserProjection, 
 
     boolean existsByUserIdAndKindAndPreset(UUID userId, ProjectionKind kind, ProjectionPreset preset);
 
+    /**
+     * Whether the user already keeps something under this name. Preset drafts are excluded
+     * because the server names those after their preset and never lists them as the user's own
+     * work — see the partial index in V19.
+     */
+    boolean existsByUserIdAndNameAndKindNot(UUID userId, String name, ProjectionKind kind);
+
+    /** The same question for a rename, where the row being renamed is not its own conflict. */
+    boolean existsByUserIdAndNameAndKindNotAndIdNot(
+            UUID userId, String name, ProjectionKind kind, UUID id);
+
     List<UserProjection> findAllByPlayerIdSpace(String playerIdSpace);
 }

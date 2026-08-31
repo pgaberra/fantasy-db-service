@@ -1,7 +1,9 @@
 package com.fantasy.db.share;
 
+import com.fantasy.db.projection.ProjectionKind;
 import com.fantasy.db.projection.UserProjection;
 import com.fantasy.db.projection.UserProjectionRepository;
+import com.fantasy.db.projection.UserProjectionService;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.user.User;
@@ -27,13 +29,16 @@ public class ProjectionImportService {
 
     private final ProjectionShareRepository projectionShareRepository;
     private final UserProjectionRepository userProjectionRepository;
+    private final UserProjectionService userProjectionService;
     private final UserRepository userRepository;
 
     public ProjectionImportService(ProjectionShareRepository projectionShareRepository,
                                    UserProjectionRepository userProjectionRepository,
+                                   UserProjectionService userProjectionService,
                                    UserRepository userRepository) {
         this.projectionShareRepository = projectionShareRepository;
         this.userProjectionRepository = userProjectionRepository;
+        this.userProjectionService = userProjectionService;
         this.userRepository = userRepository;
     }
 
@@ -47,9 +52,11 @@ public class ProjectionImportService {
      * platform their league runs on, which is not necessarily the importer's, and the importer's
      * own player pool already says which positions each player is eligible for.
      *
-     * <p>Flushed rather than left to the commit so that a name the importer already used surfaces
-     * here as a conflict, inside the boundary that maps it to a 409, rather than out of the
-     * transaction after the handler has returned.
+     * <p>The name is held to the same rule a projection's own is, and against the same list: a
+     * copy lands in the list beside the importer's own boards, so it may not arrive under a name
+     * one of those already has. Still flushed rather than left to the commit, so that a name won
+     * by a request racing this one surfaces here as a conflict, inside the boundary that maps it
+     * to a 409, rather than out of the transaction after the handler has returned.
      */
     @Transactional
     public UserProjection importFrom(UUID userId, String token, String name) {
@@ -60,10 +67,12 @@ public class ProjectionImportService {
                 .orElseThrow(() -> new NoSuchElementException("No user found for that share"));
         ProjectionData data = new ProjectionData(
                 share.getData().settings(), boardOf(share), null, null);
+        String copyName = name == null || name.isBlank() ? share.getName() : name.trim();
+        userProjectionService.requireFreeName(userId, copyName, ProjectionKind.IMPORTED, null);
 
         return userProjectionRepository.saveAndFlush(UserProjection.importedFrom(
                 userId,
-                name == null || name.isBlank() ? share.getName() : name.trim(),
+                copyName,
                 share.getSeason(),
                 data,
                 share.getToken(),

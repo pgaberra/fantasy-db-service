@@ -7,7 +7,6 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -15,10 +14,14 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(
-        name = "user_projections",
-        uniqueConstraints = @UniqueConstraint(name = "uk_user_projections_user_kind_name",
-                columnNames = {"user_id", "kind", "name"}))
+/*
+ * No uniqueConstraints here, deliberately. The rule is (user_id, name) over everything the user
+ * names, and preset drafts sit outside it — a partial index, which JPA cannot express (V19).
+ * Declaring the unfiltered version instead would put a constraint in the schema Hibernate builds
+ * for tests that production does not have, and would forbid the one overlap that is allowed. The
+ * rule lives in the migration, with UserProjectionService.requireFreeName saying it in code.
+ */
+@Table(name = "user_projections")
 public class UserProjection {
 
     @Id
