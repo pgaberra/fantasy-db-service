@@ -50,8 +50,15 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     regardless of case (a functional index on `LOWER(username)`, since "Alex" and "alex" read as
     the same name). `PUT /api/v1/users/{userId}/username` sets it; `[A-Za-z0-9_]{3,20}`. Sharing a
     projection requires it — that is the only thing that forces a name, so signing up does not.
+  - `UserAvatar` — the account's **profile picture**, a `bytea` in its own `user_avatars` table
+    (keyed by `user_id`, cascades on delete) rather than a column on `users`, since every sign-in
+    reads the user row and none of those reads want a picture along with it. The BFF is trusted to
+    have scaled the image and checked what it is; this service only bounds it (`image/png`, `jpeg`
+    or `webp`, at most 512 KiB, `UserAvatar.MAX_BYTES`). `UserAvatarService` /
+    `UserAvatarController` — `/api/v1/users/{userId}/avatar` (get 200/404, put, delete 204/404);
+    the bytes travel as base64 in JSON (`AvatarResponse` / `SetAvatarRequest`).
   - `dto/` — `CreateUserRequest`, `GoogleUserRequest` (validated), `SetUsernameRequest`,
-    `UserResponse`, `ExistsResponse`
+    `SetAvatarRequest`, `AvatarResponse`, `UserResponse`, `ExistsResponse`
 - `projection/` — feature package (saved player projections, scoped to a user):
   - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `kind`, `season`, `data`,
     `created_at`, `updated_at`; unique `(user_id, kind, name)`). `data` is the **modelled,
