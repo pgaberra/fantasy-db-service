@@ -10,6 +10,7 @@ public enum SubscriptionStatus {
     TRIALING("trialing"),
     PAST_DUE("past_due"),
     CANCELED("canceled"),
+    PAUSED("paused"),
     UNPAID("unpaid"),
     INCOMPLETE("incomplete");
 
