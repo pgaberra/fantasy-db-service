@@ -107,4 +107,17 @@ class SubscriptionServiceTest {
 
         assertThat(sub.isPremium(Instant.now())).isFalse();
     }
+
+    /**
+     * A paused subscription is a state the user can come back from, so it is stored as itself
+     * rather than folded into canceled - but a paused period is not one anybody paid for, so it
+     * grants nothing even while the old period end is still in the future.
+     */
+    @Test
+    void notPremiumWhenPaused() {
+        Subscription sub = subscriptionService.upsert(userId,
+                request(SubscriptionStatus.PAUSED, Instant.now().plusSeconds(3600), false, EARLIER));
+
+        assertThat(sub.isPremium(Instant.now())).isFalse();
+    }
 }
