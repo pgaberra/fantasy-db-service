@@ -269,21 +269,74 @@ class ProjectionImportServiceTest {
     }
 
     /**
-     * The bug this rule was written for: a copy landed in the same list as the importer's own
-     * boards, under a name one of them already had, and the two were told apart only by the
-     * smaller line under them.
+     * The bug the naming rule was written for: a copy landed in the same list as the importer's
+     * own boards under a name one of them already had, and the two were told apart only by the
+     * smaller line beneath them. Still true, and still fixed — but by numbering the copy rather
+     * than by refusing it, since nobody chose the name that clashed.
      */
     @Test
-    void refusesAnImportUnderTheNameOfTheImportersOwnProjection() {
+    void numbersAnImportThatWouldTakeTheNameOfTheImportersOwnProjection() {
         userProjectionService.create(readerId, "My Projection 3", ProjectionKind.PROJECTION, null,
                 projectionData(), PlayerIdSpace.YAHOO);
         String token = share("My Projection 3");
 
-        assertThatThrownBy(() -> projectionImportService.importFrom(readerId, token, null))
+        UserProjection copy = projectionImportService.importFrom(readerId, token, null);
+
+        assertThat(copy.getName()).isEqualTo("My Projection 3 (2)");
+        assertThat(copy.getKind()).isEqualTo(ProjectionKind.IMPORTED);
+        assertThat(userProjectionService.findAll(readerId)).hasSize(2);
+    }
+
+    /**
+     * Opening the same link a third time is the case that made this worth changing: someone who
+     * has copied a board twice already gets a third copy, not an error telling them to go and
+     * sort the naming out themselves.
+     */
+    @Test
+    void keepsNumberingForEveryFurtherCopyOfTheSameBoard() {
+        String token = share("My league");
+
+        projectionImportService.importFrom(readerId, token, null);
+        projectionImportService.importFrom(readerId, token, null);
+        UserProjection third = projectionImportService.importFrom(readerId, token, null);
+
+        assertThat(third.getName()).isEqualTo("My league (3)");
+        assertThat(userProjectionService.findAll(readerId))
+                .extracting(UserProjection::getName)
+                .containsExactlyInAnyOrder("My league", "My league (2)", "My league (3)");
+    }
+
+    /**
+     * The suffix has to fit inside the hundred characters a name gets, so a name already at the
+     * cap loses its tail rather than the copy being rejected by the column. Same shape as V19,
+     * which had to break the ties already in the table.
+     */
+    @Test
+    void trimsANameAtTheCapToMakeRoomForTheNumber() {
+        String longName = "x".repeat(100);
+        String token = share(longName);
+        projectionImportService.importFrom(readerId, token, null);
+
+        UserProjection second = projectionImportService.importFrom(readerId, token, null);
+
+        assertThat(second.getName()).hasSize(100).endsWith(" (2)");
+    }
+
+    /**
+     * A name the caller typed is theirs to change, so a clash on that one is still reported.
+     * Only the name nobody chose is settled quietly.
+     */
+    @Test
+    void stillRefusesANameTheCallerChoseThatIsAlreadyTaken() {
+        userProjectionService.create(readerId, "Taken", ProjectionKind.PROJECTION, null,
+                projectionData(), PlayerIdSpace.YAHOO);
+        String token = share("My league");
+
+        assertThatThrownBy(() -> projectionImportService.importFrom(readerId, token, "Taken"))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
-    /** And the way out of it the importer is offered: name the copy something free. */
+    /** Naming the copy yourself still works, and still wins over the numbering. */
     @Test
     void acceptsThatImportUnderAFreeName() {
         userProjectionService.create(readerId, "My Projection 3", ProjectionKind.PROJECTION, null,

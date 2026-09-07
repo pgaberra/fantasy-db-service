@@ -31,12 +31,15 @@ public class ProjectionImportController {
 
     @Operation(summary = "Copy a shared projection into the user's own, by its share token",
             description = "Anyone holding the token may copy it. The copy is of the snapshot as it "
-                    + "was published, carries no draft, and is stamped with who shared it.")
+                    + "was published, carries no draft, and is stamped with who shared it. "
+                    + "Copying the same board again is allowed: with no `name` given, a taken "
+                    + "name is resolved to \"<name> (2)\" rather than refused.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Projection imported"),
         @ApiResponse(responseCode = "400", description = "Validation failed (blank or oversized token/name)"),
         @ApiResponse(responseCode = "404", description = "No share with that token"),
-        @ApiResponse(responseCode = "409", description = "The user already has an imported projection with that name")
+        @ApiResponse(responseCode = "409", description = "The `name` given is already taken by "
+                + "another projection. Omit it and the server picks a free one.")
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
