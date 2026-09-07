@@ -57,7 +57,11 @@ public class ProjectionImportService {
      *
      * <p>The name is held to the same rule a projection's own is, and against the same list: a
      * copy lands in the list beside the importer's own boards, so it may not arrive under a name
-     * one of those already has. Still flushed rather than left to the commit, so that a name won
+     * one of those already has. Where the caller named nothing, a taken name is <em>settled</em>
+     * rather than refused — the copy becomes "Board (2)" — because importing the same link twice
+     * is a thing people do, and answering it with a conflict left them to go and sort out the
+     * naming themselves. A name the caller chose is still refused, since that one is theirs to
+     * change. Still flushed rather than left to the commit, so that a name won
      * by a request racing this one surfaces here as a conflict, inside the boundary that maps it
      * to a 409, rather than out of the transaction after the handler has returned.
      */
@@ -71,7 +75,13 @@ public class ProjectionImportService {
         ProjectionData data = new ProjectionData(
                 share.getData().settings(), boardOf(share), null,
                 share.getData().positionOverrides());
-        String copyName = name == null || name.isBlank() ? share.getName() : name.trim();
+        String copyName = name == null || name.isBlank()
+                // Nobody asked for this name, so a clash is not something to report back: the
+                // importer pressed a button on a board, and a second copy of it is a reasonable
+                // thing to want. A name they typed themselves is different, and still refused
+                // below, because that one they can see and change.
+                ? userProjectionService.freeNameFrom(userId, share.getName(), ProjectionKind.IMPORTED)
+                : name.trim();
         userProjectionService.requireFreeName(userId, copyName, ProjectionKind.IMPORTED, null);
 
         return userProjectionRepository.saveAndFlush(UserProjection.importedFrom(

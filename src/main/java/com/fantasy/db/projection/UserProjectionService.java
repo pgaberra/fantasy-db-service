@@ -16,6 +16,12 @@ import java.util.UUID;
 @Service
 public class UserProjectionService {
 
+    /** What the name column and every request DTO cap a name at. */
+    private static final int MAX_NAME_LENGTH = 100;
+
+    /** How many numbered names to try before giving up and letting the clash be reported. */
+    private static final int MAX_NAME_ATTEMPTS = 100;
+
     private final UserProjectionRepository userProjectionRepository;
     private final Season currentSeason;
 
@@ -96,6 +102,44 @@ public class UserProjectionService {
             throw new DataIntegrityViolationException(
                     "User already has a projection named " + name);
         }
+    }
+
+    /**
+     * The name a copy can actually be saved under: the preferred one where it is free, and
+     * {@code "<preferred> (2)"}, {@code " (3)"} and so on where it is not.
+     *
+     * <p>The same shape {@code V19} used when it had to break the ties already in the table, so a
+     * board renamed by that migration and one imported today read alike. Truncated the same way
+     * too — the suffix has to fit inside the hundred characters a name gets, and a name at the
+     * cap would otherwise grow past it.
+     *
+     * <p>Bounded, and the bound is not a formality: the unique index is what actually settles a
+     * race, so two imports landing together can still collide on a name this found free a moment
+     * ago. Running out returns the preferred name and lets {@link #requireFreeName} refuse it,
+     * which is the answer the caller used to get for every repeat import.
+     */
+    public String freeNameFrom(UUID userId, String preferred, ProjectionKind kind) {
+        if (kind == ProjectionKind.PRESET_DRAFT || !isTaken(userId, preferred)) {
+            return preferred;
+        }
+        for (int suffix = 2; suffix <= MAX_NAME_ATTEMPTS; suffix++) {
+            String candidate = withSuffix(preferred, suffix);
+            if (!isTaken(userId, candidate)) {
+                return candidate;
+            }
+        }
+        return preferred;
+    }
+
+    private boolean isTaken(UUID userId, String name) {
+        return userProjectionRepository.existsByUserIdAndNameAndKindNot(
+                userId, name, ProjectionKind.PRESET_DRAFT);
+    }
+
+    private static String withSuffix(String preferred, int suffix) {
+        String tail = " (" + suffix + ")";
+        int room = MAX_NAME_LENGTH - tail.length();
+        return (preferred.length() > room ? preferred.substring(0, room) : preferred) + tail;
     }
 
     /**

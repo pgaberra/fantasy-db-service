@@ -61,7 +61,8 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     `SetAvatarRequest`, `AvatarResponse`, `UserResponse`, `ExistsResponse`
 - `projection/` — feature package (saved player projections, scoped to a user):
   - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `kind`, `season`, `data`,
-    `created_at`, `updated_at`; unique `(user_id, kind, name)`). `data` is the **modelled,
+    `created_at`, `updated_at`; unique `(user_id, name)` over everything but a preset
+    draft, see `V19`). `data` is the **modelled,
     validated** `ProjectionData` (settings + per-player stats) stored in a **`jsonb`**
     column (`@JdbcTypeCode(SqlTypes.JSON)`). `season` is stamped from the
     `projections.current-season` config (the caller never sends it — not in
@@ -77,7 +78,15 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     on it; the service stores whichever kind the request asks for (defaulting to
     `PROJECTION`) and rejects a second of a kind that `isUniquePerUser()` with a 409.
     `IMPORTED` is deliberately not one of those: drafting against two friends' boards is a
-    normal thing to want, so only the unique `(user_id, kind, name)` constraint limits it.
+    normal thing to want, and so is copying the **same** board twice, so nothing limits how
+    many a user keeps. The name is what has to stay distinct, and `ProjectionImportService`
+    settles that rather than refusing: with no `name` in the request it asks
+    `UserProjectionService.freeNameFrom` for one, which is the shared name or `"… (2)"`,
+    `"… (3)"` and so on — the same shape `V19` used to break the ties already in the table,
+    and truncated the same way so the suffix fits the hundred characters a name gets. A name
+    the **caller** chose is still refused with a 409 when it is taken: that one they can see
+    and change. Repeat imports used to 409 either way, which left whoever pressed the button
+    on a share page to go and sort the naming out themselves.
     An imported row is stamped with `origin_share_token` and `origin_author_username`
     (surfaced as `ProjectionOrigin` on both responses), snapshotted at import time so the
     credit survives the share going away.
