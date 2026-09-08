@@ -156,6 +156,17 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     rename follows onto links already shared. It deliberately counts nothing: the share is fetched once for a
     chat client's link preview and again for its card, so a per-read counter measured crawlers
     rather than people (V13 dropped the column).
+- `premium/` — feature package (who has premium access):
+  - `PremiumGrant` — premium handed out by an admin rather than paid for, in its own table so a
+    provider webhook and a grant can never overwrite each other. Rows are kept and revoking sets
+    `revoked_at`, so who gave what, to whom and why stays readable. A user may hold several; the
+    one that lasts longest is the one that counts.
+  - `PremiumService` — resolves a subscription and any live grant into one answer
+    (`PremiumEntitlementResponse`: `premium`, `source`, `premiumUntil`), and lists everyone who
+    has premium right now (`PremiumCustomerResponse`) for the BFF's admin view.
+  - `UserPremiumController` — `/api/v1/users/{userId}/premium` (entitlement),
+    `/premium/grants` (list, create, revoke-all). `PremiumCustomerController` —
+    `GET /api/v1/premium/customers`.
 - `playerid/` — a one-off: rewriting stored player ids from one platform's numbering to
   another's. Yahoo stopped serving its player collection, ESPN provides the pool now, and the
   same people are numbered differently on the two.
