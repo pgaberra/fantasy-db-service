@@ -93,8 +93,13 @@ authentication into this service.
 # Start Postgres (from fantasy-db-service root)
 docker compose up -d
 
-# Run the service (no API key needed locally)
-./gradlew bootRun
+# Pick one local key and keep it for the BFF too (see below)
+export INTERNAL_API_KEY=$(openssl rand -hex 32)
+
+# Run the service. INTERNAL_API_KEY is required here as everywhere: without it the service
+# refuses to start. DB_PASSWORD has no default either; the local value is the one in
+# docker-compose.yml.
+SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… ./gradlew bootRun
 ```
 
 The service is then reachable at `http://localhost:8086`. Swagger UI:
@@ -106,6 +111,8 @@ The BFF reaches this service via `DATABASE_SERVICE_URL` (defaults to
 `http://localhost:8086`; on Coolify it is `http://db-service:8086`).
 
 ```bash
-# From fantasy-bff root (local, no INTERNAL_API_KEY needed when both are local)
-SPRING_PROFILES_ACTIVE=dev JWT_SECRET=$(openssl rand -base64 48) ./gradlew bootRun
+# From fantasy-bff root. DB_INTERNAL_API_KEY must be the same value this service was started
+# with: the BFF sends no key when it is blank, and every call then gets a 401.
+SPRING_PROFILES_ACTIVE=dev JWT_SECRET=$(openssl rand -base64 48) \
+  DB_INTERNAL_API_KEY=$INTERNAL_API_KEY ./gradlew bootRun
 ```
