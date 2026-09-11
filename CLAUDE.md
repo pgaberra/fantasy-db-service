@@ -17,7 +17,8 @@ subscriptions and admin grants).
 
 - Java 25, Spring Boot 4.1.1, Gradle (wrapper: `./gradlew`)
 - Spring WebMVC on virtual threads, Spring Data JPA, Bean Validation, Actuator
-- PostgreSQL 17 (runtime), Flyway migrations
+- PostgreSQL 16 (runtime: the Coolify resources run `postgres:16-alpine` in staging and
+  production, and `docker-compose.yml` runs the same image locally), Flyway migrations
 - Tests: JUnit 5, H2 in-memory (PostgreSQL mode)
 - springdoc OpenAPI / Swagger UI
 - Sentry via `sentry-logback` (ERROR logs; inert unless `SENTRY_DSN` is set)
@@ -297,7 +298,7 @@ The spec is LF-normalised (`.gitattributes`) so it diffs cleanly across OSes.
   and stamps that version on staging.
 - `promote-to-prod.yml`: **publishing** the draft release promotes it to production; a failed
   promotion opens a `prod-promotion-failed` issue.
-- `qodana.yml`: manual (`workflow_dispatch`) only.
+- `qodana.yml`: weekly, Mondays at 06:00 UTC (`schedule`), and on demand (`workflow_dispatch`).
 - `@claude` mentions on issues/PRs trigger `.github/workflows/claude.yml`.
 
 ## Monorepo conventions

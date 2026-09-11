@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    # Same major as the staging and production Coolify resources, so a migration that only
+    # works on a newer Postgres fails here first rather than on the staging deploy.
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: fantasy
       POSTGRES_USER: fantasy
