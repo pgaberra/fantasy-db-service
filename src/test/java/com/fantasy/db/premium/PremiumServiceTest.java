@@ -82,6 +82,28 @@ class PremiumServiceTest {
     }
 
     @Test
+    void aGrantIsActiveFromTheVeryInstantItStarts() {
+        User user = newUser("instant@example.com");
+        Instant startsAt = Instant.parse("2026-09-11T12:00:00.123456789Z");
+        premiumGrantRepository.saveAndFlush(new PremiumGrant(UUID.randomUUID(), user.getId(), "admin@example.com",
+                null, startsAt, startsAt.plus(60, ChronoUnit.DAYS), null, startsAt));
+
+        assertThat(premiumGrantRepository.findActiveByUserId(user.getId(), startsAt)).hasSize(1);
+        assertThat(premiumGrantRepository.findActive(startsAt)).hasSize(1);
+    }
+
+    @Test
+    void aGrantIsNoLongerActiveAtTheInstantItExpires() {
+        User user = newUser("expiring@example.com");
+        Instant expiresAt = Instant.parse("2026-09-11T12:00:00.123456789Z");
+        premiumGrantRepository.saveAndFlush(new PremiumGrant(UUID.randomUUID(), user.getId(), "admin@example.com",
+                null, expiresAt.minus(60, ChronoUnit.DAYS), expiresAt, null, expiresAt.minus(60, ChronoUnit.DAYS)));
+
+        assertThat(premiumGrantRepository.findActiveByUserId(user.getId(), expiresAt)).isEmpty();
+        assertThat(premiumGrantRepository.findActive(expiresAt)).isEmpty();
+    }
+
+    @Test
     void revokingEndsThePremiumButKeepsTheRow() {
         User user = newUser("revoked@example.com");
         premiumService.grant(user.getId(), request(Instant.now().plus(60, ChronoUnit.DAYS)));
