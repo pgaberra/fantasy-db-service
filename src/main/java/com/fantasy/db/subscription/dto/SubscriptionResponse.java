@@ -18,6 +18,12 @@ public record SubscriptionResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
                 description = "Whether the subscription currently grants premium access") boolean premium,
 
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Whether the subscription can still bill or be resumed (active, trialing, past_due, "
+                        + "paused or unpaid). A user holds at most one live subscription, so a caller must not "
+                        + "start a new checkout while this is true")
+        boolean live,
+
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Payment provider id") String provider,
 
         @Schema(description = "Provider-side customer id; null before the provider assigns one")
@@ -29,6 +35,7 @@ public record SubscriptionResponse(
                 subscription.getCurrentPeriodEnd(),
                 subscription.isCancelAtPeriodEnd(),
                 subscription.isPremium(now),
+                subscription.getStatus().isLive(),
                 subscription.getProvider(),
                 subscription.getProviderCustomerId());
     }

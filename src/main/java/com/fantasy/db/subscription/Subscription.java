@@ -101,8 +101,15 @@ public class Subscription {
     }
 
     public boolean isPremium(Instant now) {
-        SubscriptionStatus current = getStatus();
-        boolean activeState = current == SubscriptionStatus.ACTIVE || current == SubscriptionStatus.TRIALING;
+        return grantsPremium(getStatus(), currentPeriodEnd, now);
+    }
+
+    /**
+     * The one definition of premium from a subscription: a paid or trial state whose period has
+     * not run out. Static so an incoming provider event can be judged by it before it is stored.
+     */
+    public static boolean grantsPremium(SubscriptionStatus status, Instant currentPeriodEnd, Instant now) {
+        boolean activeState = status == SubscriptionStatus.ACTIVE || status == SubscriptionStatus.TRIALING;
         return activeState && (currentPeriodEnd == null || currentPeriodEnd.isAfter(now));
     }
 

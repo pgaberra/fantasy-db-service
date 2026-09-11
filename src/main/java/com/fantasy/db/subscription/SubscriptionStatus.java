@@ -25,6 +25,15 @@ public enum SubscriptionStatus {
         return code;
     }
 
+    /**
+     * Whether a subscription in this state can still bill or come back: everything except one
+     * that has ended ({@code canceled}) or never started ({@code incomplete}). A user holds at
+     * most one of these, since two would mean paying, or being made to pay, twice.
+     */
+    public boolean isLive() {
+        return this == ACTIVE || this == TRIALING || this == PAST_DUE || this == PAUSED || this == UNPAID;
+    }
+
     @JsonCreator
     public static SubscriptionStatus fromCode(String code) {
         return Arrays.stream(values())
