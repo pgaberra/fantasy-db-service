@@ -14,6 +14,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
@@ -63,6 +64,17 @@ public class GlobalExceptionHandler {
                 .map(err -> err.getField() + ": " + err.getDefaultMessage())
                 .collect(Collectors.joining(", "));
         return build(HttpStatus.BAD_REQUEST, message);
+    }
+
+    /**
+     * A request for a path this service does not serve. Without this the catch-all turns it into a
+     * 500 with a full stack trace. Every caller here is one of our own services, so the way it
+     * happens is version skew: a BFF newer than the deployed copy of this service calling an
+     * endpoint that build has never heard of, which is what espn-service logged in production.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorDto> handleNoResource(NoResourceFoundException e) {
+        return build(HttpStatus.NOT_FOUND, "No resource found for the requested path");
     }
 
     /**
