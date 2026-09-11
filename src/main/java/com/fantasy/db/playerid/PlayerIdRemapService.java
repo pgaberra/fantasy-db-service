@@ -12,6 +12,7 @@ import com.fantasy.db.projection.dto.DraftState;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
+import com.fantasy.db.projection.dto.ProjectionSettings;
 import com.fantasy.db.share.ProjectionShare;
 import com.fantasy.db.share.ProjectionShareRepository;
 import com.fantasy.db.share.dto.SharedPlayer;
@@ -122,8 +123,22 @@ public class PlayerIdRemapService {
                     ? player
                     : new PlayerProjection(mapped, player.type(), player.stats()));
         }
-        return new ProjectionData(data.settings(), players, remap(data.draft(), crosswalk, tally),
+        return new ProjectionData(remap(data.settings(), crosswalk), players,
+                remap(data.draft(), crosswalk, tally),
                 remapOverrides(data.positionOverrides(), crosswalk, tally));
+    }
+
+    /**
+     * The new players the owner has yet to acknowledge are named by id, so they move with the
+     * rows they point at. An id the crosswalk does not cover stays, as a row's does.
+     */
+    private static ProjectionSettings remap(ProjectionSettings settings, Map<Integer, Integer> crosswalk) {
+        if (settings == null || settings.unacknowledgedNewPlayerIds() == null) {
+            return settings;
+        }
+        return settings.withUnacknowledgedNewPlayerIds(settings.unacknowledgedNewPlayerIds().stream()
+                .map(playerId -> crosswalk.getOrDefault(playerId, playerId))
+                .toList());
     }
 
     private List<PositionOverride> remapOverrides(List<PositionOverride> overrides,

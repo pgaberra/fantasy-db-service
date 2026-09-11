@@ -67,7 +67,7 @@ class PlayerIdRemapServiceTest {
                 12,
                 null, null, null, null, null,
                 PlayerBasis.LAST_SEASON,
-                Instant.parse("2026-08-16T04:00:00Z"));
+                Instant.parse("2026-08-16T04:00:00Z"), null);
     }
 
     private static PlayerStats stats() {
@@ -210,6 +210,24 @@ class PlayerIdRemapServiceTest {
         assertThat(response.positionOverrides().unmapped()).isEqualTo(1);
         ProjectionData stored = projectionRepository.findById(projection.getId()).orElseThrow().getData();
         assertThat(stored.positionOverrides().getFirst().playerId()).isEqualTo(YAHOO_UNKNOWN);
+    }
+
+    /** The notice names its players by id, so it has to follow them into the new id space. */
+    @Test
+    void remapsTheNewPlayersTheOwnerHasNotAcknowledged() {
+        UserProjection projection = projectionRepository.save(UserProjection.create(
+                UUID.randomUUID(), "League " + UUID.randomUUID(), ProjectionKind.PROJECTION, null,
+                Season.fromCode("20262027"),
+                new ProjectionData(
+                        settings().withUnacknowledgedNewPlayerIds(List.of(YAHOO_MCDAVID, YAHOO_UNKNOWN)),
+                        List.of(new PlayerProjection(YAHOO_MCDAVID, PlayerType.SKATER, stats())),
+                        null, null),
+                PlayerIdSpace.YAHOO));
+
+        remapService.remap(request(false, mcDavid()));
+
+        ProjectionData stored = projectionRepository.findById(projection.getId()).orElseThrow().getData();
+        assertThat(stored.settings().unacknowledgedNewPlayerIds()).containsExactly(ESPN_MCDAVID, YAHOO_UNKNOWN);
     }
 
     /** Everything else on the row is the user's work and must come back untouched. */

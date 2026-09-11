@@ -75,7 +75,8 @@ class ProjectionShareServiceTest {
                 new EspnSync("Alexander's ESPN League", "123456", Instant.parse("2026-08-01T10:00:00Z")),
                 "123456",
                 PlayerBasis.LAST_SEASON,
-                Instant.parse("2026-08-16T04:00:00Z"));
+                Instant.parse("2026-08-16T04:00:00Z"),
+                List.of(1));
         PlayerProjection mcDavid = new PlayerProjection(
                 1, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)));
         return new ProjectionData(settings, List.of(mcDavid), null,
@@ -130,6 +131,8 @@ class ProjectionShareServiceTest {
         assertThat(share.getData().settings().lastEspnLeagueId()).isNull();
         assertThat(share.getData().settings().playerBasis()).isNull();
         assertThat(share.getData().settings().playerPoolSyncedAt()).isNull();
+        // The owner's unread notice would otherwise follow the board into every import.
+        assertThat(share.getData().settings().unacknowledgedNewPlayerIds()).isNull();
     }
 
     @Test
