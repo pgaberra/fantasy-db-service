@@ -1,8 +1,10 @@
 # CLAUDE.md — fantasy-db-service
 
 Persistence microservice for the fantasy hockey tool. Owns the database and
-exposes a REST API for the BFF (`fantasy-bff`) to manage data: **users**, their
-saved **projections**, and the public **shares** published from those projections.
+exposes a REST API for the BFF (`fantasy-bff`) to manage data: **users** (with their
+avatars and password reset / email verification tokens), their saved **projections**, the
+public **shares** published from those projections, and **premium** access (provider
+subscriptions and admin grants).
 
 > This service is **internal-only**: deployed on Coolify with no public domain, and every
 > `/api/**` request requires the shared `X-Internal-Api-Key` header (`INTERNAL_API_KEY`;
@@ -13,39 +15,56 @@ saved **projections**, and the public **shares** published from those projection
 
 ## Tech stack
 
-- Java 25, Spring Boot 4.0.5, Gradle (wrapper: `./gradlew`)
-- Spring WebMVC, Spring Data JPA, Bean Validation, Actuator
-- PostgreSQL (runtime), Flyway migrations
+- Java 25, Spring Boot 4.1.1, Gradle (wrapper: `./gradlew`)
+- Spring WebMVC on virtual threads, Spring Data JPA, Bean Validation, Actuator
+- PostgreSQL 17 (runtime), Flyway migrations
 - Tests: JUnit 5, H2 in-memory (PostgreSQL mode)
 - springdoc OpenAPI / Swagger UI
+- Sentry via `sentry-logback` (ERROR logs; inert unless `SENTRY_DSN` is set)
+- SpotBugs + FindSecBugs (the build fails on any finding outside `config/spotbugs/exclude.xml`),
+  JaCoCo coverage report
 
 ## Common commands
 
 ```bash
-./gradlew build          # compile + test (CI: ./gradlew build --no-daemon)
+./gradlew build          # compile + SpotBugs + tests + JaCoCo (CI: ./gradlew build jacocoTestReport --no-daemon)
 ./gradlew test           # tests only (uses H2, no Postgres needed)
 docker compose up -d     # start Postgres for local dev (defined in docker-compose.yml)
-./gradlew bootRun        # run locally (requires Postgres via docker compose above)
+SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew bootRun
 ```
+
+`INTERNAL_API_KEY` is required locally too: without it the app refuses to start.
 
 ## Architecture (`src/main/java/com/fantasy/db/`)
 
+- `config/`:
+  - `InternalApiKeyFilter` — checks `X-Internal-Api-Key` and fails closed (no key configured →
+    no startup). Exempts only `/actuator/health[/**]` and `/actuator/info`, matched on the
+    decoded, normalised path so a traversal cannot slip a protected path past it.
+  - `RequestBodyByteCountFilter` — counts the body bytes actually read, so a request body that
+    stops arriving is logged with how far it got against its `Content-Length`.
 - `user/` — feature package:
   - `User` — JPA `@Entity` (UUID id, unique email, nullable `password_hash`, unique
-    nullable `google_sub`, `created_at`); `User.create(...)` for password users,
-    `User.createWithGoogle(...)` for Google users, `linkGoogle(...)` to attach Google to
-    an existing account.
+    nullable `google_sub` and `facebook_sub`, `username`, `email_verified`, `token_version`,
+    `created_at`); `User.create(...)` for password users, `createWithGoogle(...)` /
+    `createWithFacebook(...)` for social users, `linkGoogle(...)` / `linkFacebook(...)` to attach
+    a provider to an existing account. A social sign-up starts verified; a password sign-up
+    starts unverified until it consumes an email verification token. A password reset bumps
+    `token_version`, so tokens issued before it can be rejected.
   - `UserRepository` — `findByEmailIgnoreCase`, `existsByEmailIgnoreCase`
   - `UserService` — `@Transactional` create; a duplicate email yields a
     `DataIntegrityViolationException` (→ 409), whether caught proactively or from the
     unique constraint on a race
   - `UserController` — `/api/v1/users`:
     - `GET /api/v1/users?email=` → user (404 if missing)
+    - `GET /api/v1/users/{userId}` → user (404 if missing)
     - `GET /api/v1/users/exists?email=` → `{ "exists": bool }`
     - `POST /api/v1/users` → 201 created (password user)
     - `POST /api/v1/users/google` → 200; find-or-create-or-link for a verified Google
       identity (`{ email, googleSub }`). Resolves by `google_sub`, else links to an
       existing same-email account, else creates a password-less user.
+    - `POST /api/v1/users/facebook` → 200; the same for a verified Facebook identity, by
+      `facebook_sub`.
   - `username` — the account's **public name**, nullable until the user picks one and unique
     regardless of case (a functional index on `LOWER(username)`, since "Alex" and "alex" read as
     the same name). `PUT /api/v1/users/{userId}/username` sets it; `[A-Za-z0-9_]{3,20}`. Sharing a
@@ -57,12 +76,14 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     or `webp`, at most 512 KiB, `UserAvatar.MAX_BYTES`). `UserAvatarService` /
     `UserAvatarController` — `/api/v1/users/{userId}/avatar` (get 200/404, put, delete 204/404);
     the bytes travel as base64 in JSON (`AvatarResponse` / `SetAvatarRequest`).
-  - `dto/` — `CreateUserRequest`, `GoogleUserRequest` (validated), `SetUsernameRequest`,
+  - `dto/` — `CreateUserRequest`, `GoogleUserRequest`, `FacebookUserRequest` (validated),
+    `SetUsernameRequest`,
     `SetAvatarRequest`, `AvatarResponse`, `UserResponse`, `ExistsResponse`
 - `projection/` — feature package (saved player projections, scoped to a user):
-  - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `kind`, `season`, `data`,
-    `created_at`, `updated_at`; unique `(user_id, name)` over everything but a preset
-    draft, see `V19`). `data` is the **modelled,
+  - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `kind`, `preset`, `season`,
+    `data`, `player_id_space`, `origin_share_token`, `origin_author_username`, `created_at`,
+    `updated_at`; unique `(user_id, name)` over everything but a preset draft, and unique
+    `(user_id, preset)` over preset drafts, see `V19`). `data` is the **modelled,
     validated** `ProjectionData` (settings + per-player stats) stored in a **`jsonb`**
     column (`@JdbcTypeCode(SqlTypes.JSON)`). `season` is stamped from the
     `projections.current-season` config (the caller never sends it — not in
@@ -73,13 +94,13 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     `kind` (`ProjectionKind`) separates the projection a user makes and edits
     (`PROJECTION`) from the one that only exists to hold a draft started from a preset
     such as last season's stats (`PRESET_DRAFT`), and from a board copied out of someone
-    else's share link (`IMPORTED`) — a user may keep **one of each of the first two**, and
-    only `PROJECTION` is their own work to list. Callers that show "my projections" filter
-    on it; the service stores whichever kind the request asks for (defaulting to
-    `PROJECTION`) and rejects a second of a kind that `isUniquePerUser()` with a 409.
-    `IMPORTED` is deliberately not one of those: drafting against two friends' boards is a
-    normal thing to want, and so is copying the **same** board twice, so nothing limits how
-    many a user keeps. The name is what has to stay distinct, and `ProjectionImportService`
+    else's share link (`IMPORTED`) — and only `PROJECTION` is their own work to list. Callers
+    that show "my projections" filter on it; the service stores whichever kind the request asks
+    for (defaulting to `PROJECTION`). Only `PRESET_DRAFT` is limited (`isUniquePerUser()`): **one
+    per preset** (`ProjectionPreset`: `last_season` or `model`), and a second for the same preset
+    is a 409. A user's own projections are unlimited, now that one can be started from a copy of
+    another and kept beside it. `IMPORTED` never was limited: drafting against two friends'
+    boards is a normal thing to want, and so is copying the **same** board twice. The name is what has to stay distinct, and `ProjectionImportService`
     settles that rather than refusing: with no `name` in the request it asks
     `UserProjectionService.freeNameFrom` for one, which is the shared name or `"… (2)"`,
     `"… (3)"` and so on — the same shape `V19` used to break the ties already in the table,
@@ -105,8 +126,9 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     to the read model's positions — and `PlayerIdRemapService` remaps its ids along with the
     rest, since an override left on the old id would attach to whoever the new space
     numbers that way.
-  - `Season` / `ScoringType` / `PlayerType` / `ProjectionKind` / `PlayerBasis` — enums with
-    `@JsonValue` codes (`20262027`, `points`, `skater`, `preset_draft`, `last_season`).
+  - `Season` / `ScoringType` / `PlayerType` / `ProjectionKind` / `ProjectionPreset` /
+    `PlayerBasis` / `PlayerIdSpace` — enums with `@JsonValue` codes (`20262027`, `points`,
+    `skater`, `preset_draft`, `model`, `last_season`, `espn`).
   - `UserProjectionRepository` / `UserProjectionService` — CRUD scoped to the owning
     user (`findByIdAndUserId` enforces ownership; the unique constraint yields 409).
   - `UserProjectionController` — `/api/v1/users/{userId}/projections` (list/get/create/
@@ -115,7 +137,7 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     `ProjectionSummaryResponse`, plus the `ProjectionData` model records.
 - `share/` — feature package (a projection published under a public link):
   - `ProjectionShare` — JPA `@Entity` (UUID id, unique `projection_id`, `user_id`, unique
-    `token`, `name`, `season`, `data`, timestamps). `data` is a
+    `token`, `name`, `season`, `data`, `player_id_space`, timestamps). `data` is a
     **snapshot** (`SharedProjectionData` in a `jsonb` column): the settings and the ranked rows
     as they were when shared, so a link posted publicly keeps showing what was shared rather
     than whatever the owner edited afterwards. Those rows are the **whole board**, and they are
@@ -132,8 +154,11 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     projection deletes the share with it (the row cascades) — that is the only thing that takes
     a link down.
   - `ProjectionShareService` — copies name, season, settings and `positionOverrides` from the
-    stored projection so a client cannot publish a page that misrepresents it, and **strips
-    `yahooSync`**: the owner's league name and key have no business on a public page. The ranked
+    stored projection so a client cannot publish a page that misrepresents it, and **strips**
+    from the settings what is the owner's rather than the projection's: the Yahoo/ESPN sync
+    details (league name and id, including the remembered `lastEspnLeagueId`), the player basis
+    and pool sync stamp (meaningless on a frozen snapshot), and the new players the owner has not
+    acknowledged. Sharing requires a username (`IllegalStateException` → 409). The ranked
     rows come from the caller, which owns the ranking, and carry denormalised identity (name,
     team, positions) so the public page renders without the player read model. The overrides
     travel *as well as* those positions, which already reflect them: the page renders off the
@@ -150,12 +175,24 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
     was copied from. The importer can undo them like any of their own. A link published before
     shares carried them inherits none, and starts on the reported positions.
   - `ProjectionShareController` — `/api/v1/users/{userId}/projections/{projectionId}/share`
-    (get/put/delete, ownership-scoped). `SharedProjectionController` —
+    (get/put, ownership-scoped). `SharedProjectionController` —
     `GET /api/v1/shares/{token}`, the snapshot the BFF serves publicly; it returns no owner
     identity beyond their public username, which is read **live** rather than snapshotted so a
     rename follows onto links already shared. It deliberately counts nothing: the share is fetched once for a
     chat client's link preview and again for its card, so a per-read counter measured crawlers
     rather than people (V13 dropped the column).
+- `passwordreset/` and `emailverification/` — single-use tokens:
+  `POST /api/v1/users/{password-reset|email-verification}/tokens` issues one,
+  `POST /api/v1/users/{password-reset|email-verification}` consumes it (unknown, expired or used
+  → 404). Only the SHA-256 hash is stored, and issuing replaces any outstanding token. Issuing
+  for an account that cannot use one (unknown email; for a reset, a password-less account; for
+  verification, one already verified) issues nothing, so the BFF can answer identically either
+  way. Lifetimes: `security.password-reset.token-ttl` (default `PT30M`) and
+  `security.email-verification.token-ttl` (default `P1D`).
+- `subscription/` — one provider subscription per user (`Subscription`, statuses in
+  `SubscriptionStatus`). `PUT /api/v1/users/{userId}/subscription` upserts it from a provider
+  event and **ignores an event older than the stored `last_event_at`**, so out-of-order webhooks
+  cannot roll a subscription back; `GET` reads it (404 if none).
 - `premium/` — feature package (who has premium access):
   - `PremiumGrant` — premium handed out by an admin rather than paid for, in its own table so a
     provider webhook and a grant can never overwrite each other. Rows are kept and revoking sets
@@ -182,15 +219,18 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
 - `exception/` — `ErrorDto`, `GlobalExceptionHandler`. The whole service uses **built-in**
   exceptions rather than custom ones (`NoSuchElementException` → 404,
   `IllegalArgumentException` → 400, `IllegalStateException` → 409,
-  `DataIntegrityViolationException` → 409, `MethodArgumentNotValidException` → 400).
+  `DataIntegrityViolationException` → 409, `MethodArgumentNotValidException` → 400,
+  `NoResourceFoundException` → 404 for a path this build does not serve).
 
 ## Database & config
 
 - `application.yaml`: datasource
-  `jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:fantasy}`,
-  `ddl-auto: validate` (schema is owned by Flyway, **not** Hibernate),
-  `server.port=${PORT:8086}`.
-- Migrations live in `src/main/resources/db/migration/` (`V1__create_users_table.sql`).
+  `jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:fantasy}` with
+  `${DB_USER:fantasy}` / `${DB_PASSWORD}` (no default), `ddl-auto: validate` (schema is owned
+  by Flyway, **not** Hibernate), `internal.api-key: ${INTERNAL_API_KEY:}` (blank refuses to
+  start), `server.port=${PORT:8086}`. Profiles: `application-local.yaml` (docker-compose
+  Postgres) and `application-staging.yaml`.
+- Migrations live in `src/main/resources/db/migration/` (`V1__create_users_table.sql` onward).
   **Schema changes = a new `V__` migration**, never edit an applied one and never
   rely on Hibernate auto-DDL.
 - Tests (`src/test/resources/application.yaml`): H2 in PostgreSQL mode,
@@ -212,7 +252,11 @@ docker compose up -d     # start Postgres for local dev (defined in docker-compo
 
 The monorepo-wide rule (never silence an error; `ERROR` for 5xx, quiet for 4xx) lives in
 the root `CLAUDE.md`. Specific here: built-in exceptions only, mapped as listed under
-`exception/` above.
+`exception/` above. A caller that goes away (a `ClientAbortException` or
+`AsyncRequestNotUsableException` in the cause chain) is logged at `WARN`, not `ERROR`:
+mid-response with nothing sent, mid-request with a 400 and the bytes read against the declared
+length. Any other failure to read or write a body stays an `ERROR`, because every caller is one
+of our own services and JSON we cannot parse is our bug.
 
 ### OpenAPI annotations
 
@@ -247,7 +291,13 @@ The spec is LF-normalised (`.gitattributes`) so it diffs cleanly across OSes.
 
 ## CI / workflow
 
-- `.github/workflows/pr-checks.yml`: `./gradlew build --no-daemon` on PRs to `master`.
+- `.github/workflows/pr-checks.yml`: `./gradlew build jacocoTestReport --no-daemon` on PRs to
+  `master`.
+- `tag-on-merge.yml`: every merge to `master` tags a version, creates a **draft** GitHub Release
+  and stamps that version on staging.
+- `promote-to-prod.yml`: **publishing** the draft release promotes it to production; a failed
+  promotion opens a `prod-promotion-failed` issue.
+- `qodana.yml`: manual (`workflow_dispatch`) only.
 - `@claude` mentions on issues/PRs trigger `.github/workflows/claude.yml`.
 
 ## Monorepo conventions
