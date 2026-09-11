@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Entity
@@ -47,10 +48,10 @@ public class PremiumGrant {
         this.userId = userId;
         this.grantedBy = grantedBy;
         this.reason = reason;
-        this.startsAt = startsAt;
-        this.expiresAt = expiresAt;
-        this.revokedAt = revokedAt;
-        this.createdAt = createdAt;
+        this.startsAt = atColumnPrecision(startsAt);
+        this.expiresAt = atColumnPrecision(expiresAt);
+        this.revokedAt = atColumnPrecision(revokedAt);
+        this.createdAt = atColumnPrecision(createdAt);
     }
 
     public static PremiumGrant create(UUID userId, String grantedBy, String reason, Instant expiresAt) {
@@ -60,12 +61,16 @@ public class PremiumGrant {
 
     public void revoke(Instant revokedAt) {
         if (this.revokedAt == null) {
-            this.revokedAt = revokedAt;
+            this.revokedAt = atColumnPrecision(revokedAt);
         }
     }
 
     public boolean isActive(Instant now) {
         return revokedAt == null && !startsAt.isAfter(now) && expiresAt.isAfter(now);
+    }
+
+    private static Instant atColumnPrecision(Instant instant) {
+        return instant == null ? null : instant.truncatedTo(ChronoUnit.MICROS);
     }
 
     public UUID getId() {
