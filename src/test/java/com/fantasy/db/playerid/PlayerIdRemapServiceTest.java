@@ -45,6 +45,9 @@ class PlayerIdRemapServiceTest {
     private static final int YAHOO_MCDAVID = 6743;
     private static final int ESPN_MCDAVID = 3895074;
     private static final int YAHOO_UNKNOWN = 9999;
+    private static final int YAHOO_DUMOULIN = 5659;
+    private static final int ESPN_DUMOULIN = 5738;
+    private static final int YAHOO_FRK = 5738;
 
     @Autowired
     private PlayerIdRemapService remapService;
@@ -118,6 +121,10 @@ class PlayerIdRemapServiceTest {
 
     private static PlayerIdPair mcDavid() {
         return new PlayerIdPair(YAHOO_MCDAVID, ESPN_MCDAVID);
+    }
+
+    private static PlayerIdPair dumoulin() {
+        return new PlayerIdPair(YAHOO_DUMOULIN, ESPN_DUMOULIN);
     }
 
     @Test
@@ -280,9 +287,9 @@ class PlayerIdRemapServiceTest {
         PlayerIdRemapResponse response = remapService.remap(request(false, mcDavid()));
 
         assertThat(response.playerRows()).isEqualTo(
-                new PlayerIdRemapResponse.RemapCounts(1, 1));
+                new PlayerIdRemapResponse.RemapCounts(1, 1, 0));
         assertThat(response.draftPicks()).isEqualTo(
-                new PlayerIdRemapResponse.RemapCounts(0, 1));
+                new PlayerIdRemapResponse.RemapCounts(0, 1, 0));
         assertThat(response.unmappedPlayerIds()).containsExactly(YAHOO_UNKNOWN);
         assertThat(projectionRepository.findById(projection.getId()).orElseThrow()
                 .getData().players()).extracting(PlayerProjection::playerId)
@@ -323,5 +330,76 @@ class PlayerIdRemapServiceTest {
 
         assertThat(remapService.remap(request(false, mcDavid(), mcDavid())).playerRows().remapped())
                 .isEqualTo(1);
+    }
+
+    /**
+     * Yahoo numbered Dumoulin 5659 and Frk 5738; ESPN numbers Dumoulin 5738 and does not carry Frk.
+     * Kept on 5738, Frk's row would sit beside Dumoulin's under his id and be drawn as him.
+     */
+    @Test
+    void removesAnUncoveredRowWhoseIdAnotherPlayerIsMovedTo() {
+        UserProjection projection = storeProjection(null, YAHOO_DUMOULIN, YAHOO_FRK, YAHOO_UNKNOWN);
+
+        PlayerIdRemapResponse response = remapService.remap(request(false, dumoulin()));
+
+        assertThat(response.playerRows()).isEqualTo(new PlayerIdRemapResponse.RemapCounts(1, 1, 1));
+        assertThat(response.collidingPlayerIds()).containsExactly(YAHOO_FRK);
+        assertThat(response.unmappedPlayerIds()).containsExactly(YAHOO_UNKNOWN);
+        assertThat(projectionRepository.findById(projection.getId()).orElseThrow()
+                .getData().players()).extracting(PlayerProjection::playerId)
+                .containsExactlyInAnyOrder(ESPN_DUMOULIN, YAHOO_UNKNOWN);
+    }
+
+    @Test
+    void aDryRunCountsTheCollidingRowsAndKeepsThem() {
+        UserProjection projection = storeProjection(null, YAHOO_DUMOULIN, YAHOO_FRK);
+
+        PlayerIdRemapResponse response = remapService.remap(request(true, dumoulin()));
+
+        assertThat(response.playerRows().colliding()).isEqualTo(1);
+        assertThat(projectionRepository.findById(projection.getId()).orElseThrow()
+                .getData().players()).extracting(PlayerProjection::playerId)
+                .containsExactly(YAHOO_DUMOULIN, YAHOO_FRK);
+    }
+
+    /** Whatever else names the colliding player by id has to go with his row. */
+    @Test
+    void removesTheOverridesNoticesAndSharedRowsOfACollidingId() {
+        UserProjection projection = projectionRepository.save(UserProjection.create(
+                UUID.randomUUID(), "League " + UUID.randomUUID(), ProjectionKind.PROJECTION, null,
+                Season.fromCode("20262027"),
+                new ProjectionData(
+                        settings().withUnacknowledgedNewPlayerIds(List.of(YAHOO_FRK, YAHOO_UNKNOWN)),
+                        List.of(new PlayerProjection(YAHOO_FRK, PlayerType.SKATER, stats())),
+                        null,
+                        List.of(new PositionOverride(YAHOO_FRK, List.of(SkaterPosition.RW)))),
+                PlayerIdSpace.YAHOO));
+        ProjectionShare share = storeShare(YAHOO_FRK);
+
+        PlayerIdRemapResponse response = remapService.remap(request(false, dumoulin()));
+
+        assertThat(response.positionOverrides().colliding()).isEqualTo(1);
+        assertThat(response.sharedRows().colliding()).isEqualTo(1);
+        ProjectionData stored = projectionRepository.findById(projection.getId()).orElseThrow().getData();
+        assertThat(stored.players()).isEmpty();
+        assertThat(stored.positionOverrides()).isEmpty();
+        assertThat(stored.settings().unacknowledgedNewPlayerIds()).containsExactly(YAHOO_UNKNOWN);
+        assertThat(shareRepository.findById(share.getId()).orElseThrow().getData().players()).isEmpty();
+    }
+
+    /** Dropping a pick would hand a team one pick fewer, so the draft is not the remap's to change. */
+    @Test
+    void refusesToApplyOverADraftPickOnACollidingId() {
+        UserProjection projection = storeProjection(draftWith(YAHOO_FRK), YAHOO_DUMOULIN, YAHOO_FRK);
+
+        assertThat(remapService.remap(request(true, dumoulin())).draftPicks().colliding()).isEqualTo(1);
+        assertThatThrownBy(() -> remapService.remap(request(false, dumoulin())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(String.valueOf(YAHOO_FRK));
+
+        UserProjection stored = projectionRepository.findById(projection.getId()).orElseThrow();
+        assertThat(stored.getPlayerIdSpace()).isEqualTo(PlayerIdSpace.YAHOO);
+        assertThat(stored.getData().players()).extracting(PlayerProjection::playerId)
+                .containsExactly(YAHOO_DUMOULIN, YAHOO_FRK);
     }
 }
