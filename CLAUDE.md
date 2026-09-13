@@ -213,7 +213,11 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
     `player_id_space = 'yahoo'`, and stamps them `espn`. **Dry run by default**: an unqualified
     call reports and writes nothing. An id the crosswalk does not cover is **left as it is**,
     never dropped — a row the app cannot draw is invisible and recoverable, a deleted row is a
-    user's work gone. The marker is what makes a second run safe: the two id spaces overlap in
+    user's work gone. The one exception is an uncovered id that another player is being moved
+    **to** (Yahoo's 5738 was Martin Frk, ESPN's is Brian Dumoulin): kept, that row would be drawn
+    as the other player, so it is removed along with its overrides and notices, and counted as
+    `colliding`. A draft pick like that is never removed, since that would rewrite the draft; any
+    at all make an apply refuse with 409. The marker is what makes a second run safe: the two id spaces overlap in
     range, so re-running over an already-remapped row could translate an id that was never
     Yahoo's.
   - `PlayerIdRemapController` — `POST /api/v1/admin/player-ids/remap`.
