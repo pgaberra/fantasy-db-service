@@ -303,7 +303,6 @@ The spec is LF-normalised (`.gitattributes`) so it diffs cleanly across OSes.
 - `promote-to-prod.yml`: **publishing** the draft release promotes it to production; a failed
   promotion opens a `prod-promotion-failed` issue.
 - `qodana.yml`: weekly, Mondays at 06:00 UTC (`schedule`), and on demand (`workflow_dispatch`).
-- `@claude` mentions on issues/PRs trigger `.github/workflows/claude.yml`.
 
 ## Monorepo conventions
 
