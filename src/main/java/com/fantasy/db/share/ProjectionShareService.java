@@ -56,7 +56,8 @@ public class ProjectionShareService {
 
         return projectionShareRepository.findByProjectionIdAndUserId(projectionId, userId)
                 .orElseGet(() -> projectionShareRepository.save(ProjectionShare.create(
-                        projectionId, userId, projection.getName(), projection.getSeason(), data)));
+                        projectionId, userId, projection.getName(), projection.getSeason(), data,
+                        projection.getPlayerIdSpace())));
     }
 
     @Transactional(readOnly = true)
@@ -87,7 +88,8 @@ public class ProjectionShareService {
      * outlives the sync — and that is about their private league rather
      * than the projection anyone with the link came to look at. The player basis and pool stamp go
      * with them: a share is a frozen snapshot, so how its rows would be kept in step with the
-     * player pool no longer says anything.
+     * player pool no longer says anything. So do the new players the owner has not acknowledged:
+     * that notice is theirs, and an import would otherwise hand it to someone else.
      */
     private ProjectionSettings publishable(ProjectionSettings settings) {
         return new ProjectionSettings(
@@ -105,6 +107,6 @@ public class ProjectionShareService {
                 null,
                 null,
                 null,
-                null);
+                null, null);
     }
 }

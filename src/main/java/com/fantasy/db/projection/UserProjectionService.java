@@ -163,7 +163,25 @@ public class UserProjectionService {
      */
     @Transactional
     public UserProjection update(UUID userId, UUID id, String name, UpdateProjectionData incoming) {
+        return update(userId, id, name, incoming, null);
+    }
+
+    /**
+     * @param callerSpace the numbering the incoming rows are keyed by, or null when the caller
+     *     does not say. A caller serving another platform's pool than the one the stored rows are
+     *     keyed by is refused before anything is written: its rows are the pool it can draw, so a
+     *     save would drop every stored row that pool does not carry and put some under the wrong
+     *     player, which is what switching the pool without migrating the rows first does.
+     */
+    @Transactional
+    public UserProjection update(UUID userId, UUID id, String name, UpdateProjectionData incoming,
+                                 PlayerIdSpace callerSpace) {
         UserProjection projection = findById(userId, id);
+        if (callerSpace != null && callerSpace != projection.getPlayerIdSpace()) {
+            throw new IllegalStateException(("This projection's player ids are %s's and the "
+                    + "update was built from %s's player pool. Nothing was written.")
+                    .formatted(projection.getPlayerIdSpace().getCode(), callerSpace.getCode()));
+        }
         // A rename has to answer to the same rule a new name does, or the rule is only a rule
         // until someone edits. Its own row is not the conflict.
         requireFreeName(userId, name, projection.getKind(), id);

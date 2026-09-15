@@ -63,6 +63,7 @@ class SubscriptionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("active"))
                 .andExpect(jsonPath("$.premium").value(true))
+                .andExpect(jsonPath("$.live").value(true))
                 .andExpect(jsonPath("$.provider").value("mock"))
                 .andExpect(jsonPath("$.providerCustomerId").value("cus_123"));
     }

@@ -36,5 +36,16 @@ public record ProjectionSettings(
         @Schema(description = "What the player rows started from, and so what a player who joins the pool later is seeded with: last season's stat line, or zeros. Absent on projections saved before this was recorded.")
         PlayerBasis playerBasis,
         @Schema(description = "When the player rows were last reconciled against the player pool — the finish time of the sync run they were reconciled against. Absent until the rows have been reconciled once.")
-        Instant playerPoolSyncedAt
-) {}
+        Instant playerPoolSyncedAt,
+        @Schema(description = "Players a reconciliation with the player pool added whom the owner has not acknowledged yet, kept so the app can go on saying so until they do. Absent once acknowledged, and on a projection nothing was ever added to. The cap matches the player list.")
+        @Size(max = 2000) List<Integer> unacknowledgedNewPlayerIds
+) {
+
+    /** These settings with a different set of unacknowledged new players. */
+    public ProjectionSettings withUnacknowledgedNewPlayerIds(List<Integer> playerIds) {
+        return new ProjectionSettings(scoringType, statWeights, activeScoringColumns,
+                activeUtilityColumns, scaleSettings, decimalSettings, useDefaultDecimals, leagueSize,
+                rosterSlots, minGoalieGames, yahooSync, espnSync, lastEspnLeagueId, playerBasis,
+                playerPoolSyncedAt, playerIds);
+    }
+}

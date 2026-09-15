@@ -49,7 +49,8 @@ class UserProjectionServiceTest {
                 null,
                 null,
                 PlayerBasis.LAST_SEASON,
-                Instant.parse("2026-08-16T04:00:00Z"));
+                Instant.parse("2026-08-16T04:00:00Z"),
+                List.of(1));
         PlayerProjection mcDavid = new PlayerProjection(
                 1, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)));
         return new ProjectionData(settings, List.of(mcDavid), null, null);
@@ -83,16 +84,18 @@ class UserProjectionServiceTest {
     /**
      * What the rows started from, and when they were last squared with the player pool, has to
      * survive the jsonb round-trip: it is the only thing that says what a player who joins the
-     * pool later should be seeded with.
+     * pool later should be seeded with. So do the players that squaring added and the owner has
+     * not acknowledged, or the notice would go with the next page load.
      */
     @Test
-    void keepsThePlayerBasisAndPoolStamp() {
+    void keepsThePlayerBasisPoolStampAndUnacknowledgedPlayers() {
         UserProjection created = create("Based");
 
         ProjectionSettings stored = userProjectionService.findById(userId, created.getId())
                 .getData().settings();
         assertThat(stored.playerBasis()).isEqualTo(PlayerBasis.LAST_SEASON);
         assertThat(stored.playerPoolSyncedAt()).isEqualTo(Instant.parse("2026-08-16T04:00:00Z"));
+        assertThat(stored.unacknowledgedNewPlayerIds()).containsExactly(1);
     }
 
     @Test
@@ -260,6 +263,39 @@ class UserProjectionServiceTest {
 
         assertThat(updated.getName()).isEqualTo("New");
         assertThat(updated.getData().players().getFirst().type()).isEqualTo(PlayerType.GOALIE);
+    }
+
+    /**
+     * Rows built from another platform's pool than the stored ones would replace the user's
+     * players with whoever that pool gives those numbers to. That is what a save does in the
+     * window between switching the pool and migrating the rows, so it is refused whole.
+     */
+    @Test
+    void refusesAnUpdateBuiltFromAnotherPlatformsPool() {
+        UserProjection created = create("Old");
+        UpdateProjectionData fromEspn = new UpdateProjectionData(sampleData().settings(),
+                List.of(new PlayerProjection(
+                        3895074, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of()))),
+                null, null);
+
+        assertThatThrownBy(() -> userProjectionService.update(
+                userId, created.getId(), "New", fromEspn, PlayerIdSpace.ESPN))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Nothing was written");
+
+        UserProjection stored = userProjectionService.findById(userId, created.getId());
+        assertThat(stored.getName()).isEqualTo("Old");
+        assertThat(stored.getData().players().getFirst().playerId()).isEqualTo(1);
+    }
+
+    @Test
+    void acceptsAnUpdateFromThePoolTheRowsAreKeyedBy() {
+        UserProjection created = create("Old");
+
+        UserProjection updated = userProjectionService.update(userId, created.getId(), "New",
+                new UpdateProjectionData(sampleData().settings(), null, null, null), PlayerIdSpace.YAHOO);
+
+        assertThat(updated.getName()).isEqualTo("New");
     }
 
     /**

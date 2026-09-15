@@ -12,6 +12,7 @@ import com.fantasy.db.projection.dto.DraftState;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
+import com.fantasy.db.projection.dto.ProjectionSettings;
 import com.fantasy.db.share.ProjectionShare;
 import com.fantasy.db.share.ProjectionShareRepository;
 import com.fantasy.db.share.dto.SharedPlayer;
@@ -23,8 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 
 /**
@@ -38,6 +41,16 @@ import java.util.TreeSet;
  * <p>An id the crosswalk has no entry for is <b>left exactly as it is</b>, never dropped. A row
  * the app cannot draw is invisible and recoverable; a deleted row is a user's work gone. The
  * counts say how many there were, which is what a dry run is for.
+ *
+ * <p>The exception is an uncovered id that some other player is being moved <b>to</b>. The two
+ * numberings overlap, so Yahoo's 5738 (Martin Frk, whom ESPN does not carry) is ESPN's Brian
+ * Dumoulin: kept, Frk's row would sit under Dumoulin's id and be drawn as him, which is neither
+ * invisible nor recoverable. Such a row is removed. A draft pick like it is not, because that
+ * would rewrite the draft, so any at all make an apply refuse.
+ *
+ * <p>It runs in either direction. The first migration moved everything from Yahoo's ids to
+ * ESPN's; when Yahoo served its players again the pool went back, so the same rules apply with
+ * the two sides swapped. Only rows stamped with the numbering being left are read.
  */
 @Service
 public class PlayerIdRemapService {
@@ -45,7 +58,7 @@ public class PlayerIdRemapService {
     private static final Logger log = LoggerFactory.getLogger(PlayerIdRemapService.class);
 
     /** Enough to see the shape of what went unmatched without answering with a wall of ids. */
-    private static final int UNMAPPED_SAMPLE = 50;
+    private static final int ID_SAMPLE = 50;
 
     private final UserProjectionRepository projectionRepository;
     private final ProjectionShareRepository shareRepository;
@@ -58,43 +71,63 @@ public class PlayerIdRemapService {
 
     @Transactional
     public PlayerIdRemapResponse remap(PlayerIdRemapRequest request) {
-        Map<Integer, Integer> crosswalk = crosswalk(request.mappings());
         boolean dryRun = request.isDryRun();
-        Tally tally = new Tally();
+        PlayerIdSpace from = request.fromSpace();
+        PlayerIdSpace to = request.toSpace();
+        if (from == to) {
+            // Stamping rows with the numbering they already carry would mark nothing as moved
+            // while translating every id: each one would become some other player.
+            throw new IllegalArgumentException("A remap has to move rows between two numberings, "
+                    + "not from " + from.getCode() + " to itself");
+        }
+        Tally tally = new Tally(crosswalk(request.mappings()));
+        List<Runnable> writes = new ArrayList<>();
 
-        List<UserProjection> projections =
-                projectionRepository.findAllByPlayerIdSpace(PlayerIdSpace.YAHOO.getCode());
+        List<UserProjection> projections = projectionRepository.findAllByPlayerIdSpace(from.getCode());
         for (UserProjection projection : projections) {
-            ProjectionData remapped = remap(projection.getData(), crosswalk, tally);
-            if (!dryRun) {
-                projection.remapPlayerIds(remapped, PlayerIdSpace.ESPN);
-            }
+            ProjectionData remapped = remap(projection.getData(), tally);
+            writes.add(() -> projection.remapPlayerIds(remapped, to));
         }
 
-        List<ProjectionShare> shares =
-                shareRepository.findAllByPlayerIdSpace(PlayerIdSpace.YAHOO.getCode());
+        List<ProjectionShare> shares = shareRepository.findAllByPlayerIdSpace(from.getCode());
         for (ProjectionShare share : shares) {
-            SharedProjectionData remapped = remap(share.getData(), crosswalk, tally);
-            if (!dryRun) {
-                share.remapPlayerIds(remapped, PlayerIdSpace.ESPN);
+            SharedProjectionData remapped = remap(share.getData(), tally);
+            writes.add(() -> share.remapPlayerIds(remapped, to));
+        }
+
+        if (!dryRun) {
+            if (tally.draftPicks.colliding > 0) {
+                throw new IllegalStateException(("%d draft picks name a player whose old id "
+                        + "another player is being moved to (%s), and removing a pick would "
+                        + "rewrite the draft. Nothing was written.")
+                        .formatted(tally.draftPicks.colliding, tally.collidingSample()));
             }
+            writes.forEach(Runnable::run);
         }
 
         PlayerIdRemapResponse response = new PlayerIdRemapResponse(
                 dryRun,
+                from,
+                to,
                 projections.size(),
-                new RemapCounts(tally.playerRowsRemapped, tally.playerRowsUnmapped),
-                new RemapCounts(tally.draftPicksRemapped, tally.draftPicksUnmapped),
-                new RemapCounts(tally.positionOverridesRemapped, tally.positionOverridesUnmapped),
+                tally.playerRows.counts(),
+                tally.draftPicks.counts(),
+                tally.positionOverrides.counts(),
                 shares.size(),
-                new RemapCounts(tally.sharedRowsRemapped, tally.sharedRowsUnmapped),
-                tally.unmappedSample());
-        log.info("Player id remap ({}): {} projections, {} shares; {} player rows and {} draft "
-                        + "picks remapped, {} rows left on an id the crosswalk did not cover",
-                dryRun ? "dry run" : "applied", projections.size(), shares.size(),
-                tally.playerRowsRemapped, tally.draftPicksRemapped,
-                tally.playerRowsUnmapped + tally.draftPicksUnmapped + tally.sharedRowsUnmapped
-                        + tally.positionOverridesUnmapped);
+                tally.sharedRows.counts(),
+                tally.unmappedSample(),
+                tally.collidingSample());
+        log.info("Player id remap {} to {} ({}): {} projections, {} shares; {} player rows and {} "
+                        + "draft picks remapped, {} rows left on an id the crosswalk did not cover, {} "
+                        + "removed for sitting on an id another player moves to",
+                from == PlayerIdSpace.ESPN ? "espn" : "yahoo", to == PlayerIdSpace.ESPN ? "espn" : "yahoo",
+                dryRun ? "dry run" : "applied",
+                projections.size(), shares.size(),
+                tally.playerRows.remapped, tally.draftPicks.remapped,
+                tally.playerRows.unmapped + tally.draftPicks.unmapped + tally.sharedRows.unmapped
+                        + tally.positionOverrides.unmapped,
+                tally.playerRows.colliding + tally.sharedRows.colliding
+                        + tally.positionOverrides.colliding);
         return response;
     }
 
@@ -113,115 +146,144 @@ public class PlayerIdRemapService {
         return crosswalk;
     }
 
-    private ProjectionData remap(ProjectionData data, Map<Integer, Integer> crosswalk, Tally tally) {
+    private ProjectionData remap(ProjectionData data, Tally tally) {
         List<PlayerProjection> players = new ArrayList<>(data.players().size());
         for (PlayerProjection player : data.players()) {
-            Integer mapped = crosswalk.get(player.playerId());
-            tally.player(mapped != null, player.playerId());
-            players.add(mapped == null
-                    ? player
-                    : new PlayerProjection(mapped, player.type(), player.stats()));
+            Integer placed = tally.place(player.playerId(), tally.playerRows);
+            if (placed != null) {
+                players.add(placed == player.playerId()
+                        ? player
+                        : new PlayerProjection(placed, player.type(), player.stats()));
+            }
         }
-        return new ProjectionData(data.settings(), players, remap(data.draft(), crosswalk, tally),
-                remapOverrides(data.positionOverrides(), crosswalk, tally));
+        return new ProjectionData(remap(data.settings(), tally), players,
+                remap(data.draft(), tally),
+                remapOverrides(data.positionOverrides(), tally));
     }
 
-    private List<PositionOverride> remapOverrides(List<PositionOverride> overrides,
-                                                  Map<Integer, Integer> crosswalk, Tally tally) {
+    /**
+     * The new players the owner has yet to acknowledge are named by id, so they move with the
+     * rows they point at: an id the crosswalk does not cover stays, as a row's does, and one on a
+     * colliding id goes, as its row does.
+     */
+    private static ProjectionSettings remap(ProjectionSettings settings, Tally tally) {
+        if (settings == null || settings.unacknowledgedNewPlayerIds() == null) {
+            return settings;
+        }
+        List<Integer> ids = new ArrayList<>();
+        for (Integer playerId : settings.unacknowledgedNewPlayerIds()) {
+            Integer placed = tally.placeUncounted(playerId);
+            if (placed != null) {
+                ids.add(placed);
+            }
+        }
+        return settings.withUnacknowledgedNewPlayerIds(ids);
+    }
+
+    private List<PositionOverride> remapOverrides(List<PositionOverride> overrides, Tally tally) {
         if (overrides == null) {
             return null;
         }
         List<PositionOverride> remapped = new ArrayList<>(overrides.size());
         for (PositionOverride override : overrides) {
-            Integer mapped = crosswalk.get(override.playerId());
-            tally.positionOverride(mapped != null, override.playerId());
-            remapped.add(mapped == null
-                    ? override
-                    : new PositionOverride(mapped, override.positions()));
+            Integer placed = tally.place(override.playerId(), tally.positionOverrides);
+            if (placed != null) {
+                remapped.add(placed == override.playerId()
+                        ? override
+                        : new PositionOverride(placed, override.positions()));
+            }
         }
         return remapped;
     }
 
-    private DraftState remap(DraftState draft, Map<Integer, Integer> crosswalk, Tally tally) {
+    private DraftState remap(DraftState draft, Tally tally) {
         if (draft == null) {
             return null;
         }
         List<DraftPick> picks = new ArrayList<>(draft.picks().size());
         for (DraftPick pick : draft.picks()) {
-            Integer mapped = crosswalk.get(pick.playerId());
-            tally.draftPick(mapped != null, pick.playerId());
-            picks.add(mapped == null ? pick : new DraftPick(mapped, pick.teamId()));
+            Integer placed = tally.place(pick.playerId(), tally.draftPicks);
+            picks.add(placed == null || placed == pick.playerId()
+                    ? pick
+                    : new DraftPick(placed, pick.teamId()));
         }
         return new DraftState(draft.teams(), draft.order(), picks, draft.finishedAt());
     }
 
-    private SharedProjectionData remap(SharedProjectionData data, Map<Integer, Integer> crosswalk,
-                                       Tally tally) {
+    private SharedProjectionData remap(SharedProjectionData data, Tally tally) {
         List<SharedPlayer> players = new ArrayList<>(data.players().size());
         for (SharedPlayer player : data.players()) {
-            Integer mapped = crosswalk.get(player.playerId());
-            tally.sharedRow(mapped != null, player.playerId());
-            players.add(mapped == null
-                    ? player
-                    : new SharedPlayer(mapped, player.name(), player.teamAbbrev(),
-                            player.headshot(), player.positions(), player.type(), player.rank(),
-                            player.value(), player.stats()));
+            Integer placed = tally.place(player.playerId(), tally.sharedRows);
+            if (placed != null) {
+                players.add(placed == player.playerId()
+                        ? player
+                        : new SharedPlayer(placed, player.name(), player.teamAbbrev(),
+                                player.headshot(), player.positions(), player.type(), player.rank(),
+                                player.value(), player.stats()));
+            }
         }
         return new SharedProjectionData(data.settings(), players,
-                remapOverrides(data.positionOverrides(), crosswalk, tally));
+                remapOverrides(data.positionOverrides(), tally));
     }
 
+    private static final class Counter {
+
+        private int remapped;
+        private int unmapped;
+        private int colliding;
+
+        RemapCounts counts() {
+            return new RemapCounts(remapped, unmapped, colliding);
+        }
+    }
 
     private static final class Tally {
 
-        private int playerRowsRemapped;
-        private int playerRowsUnmapped;
-        private int draftPicksRemapped;
-        private int draftPicksUnmapped;
-        private int sharedRowsRemapped;
-        private int sharedRowsUnmapped;
-        private int positionOverridesRemapped;
-        private int positionOverridesUnmapped;
+        private final Map<Integer, Integer> crosswalk;
+        private final Set<Integer> destinations;
+        private final Counter playerRows = new Counter();
+        private final Counter draftPicks = new Counter();
+        private final Counter positionOverrides = new Counter();
+        private final Counter sharedRows = new Counter();
         private final TreeSet<Integer> unmapped = new TreeSet<>();
+        private final TreeSet<Integer> colliding = new TreeSet<>();
 
-        void player(boolean mapped, int playerId) {
-            if (mapped) {
-                playerRowsRemapped++;
-            } else {
-                playerRowsUnmapped++;
-                unmapped.add(playerId);
-            }
+        Tally(Map<Integer, Integer> crosswalk) {
+            this.crosswalk = crosswalk;
+            this.destinations = new HashSet<>(crosswalk.values());
         }
 
-        void draftPick(boolean mapped, int playerId) {
-            if (mapped) {
-                draftPicksRemapped++;
-            } else {
-                draftPicksUnmapped++;
-                unmapped.add(playerId);
+        /** The id a stored reference moves to, its own id if it stays, or null if it has to go. */
+        Integer place(int playerId, Counter counter) {
+            Integer mapped = crosswalk.get(playerId);
+            if (mapped != null) {
+                counter.remapped++;
+                return mapped;
             }
+            if (destinations.contains(playerId)) {
+                counter.colliding++;
+                colliding.add(playerId);
+                return null;
+            }
+            counter.unmapped++;
+            unmapped.add(playerId);
+            return playerId;
         }
 
-        void positionOverride(boolean mapped, int playerId) {
-            if (mapped) {
-                positionOverridesRemapped++;
-            } else {
-                positionOverridesUnmapped++;
-                unmapped.add(playerId);
+        Integer placeUncounted(int playerId) {
+            Integer mapped = crosswalk.get(playerId);
+            if (mapped != null) {
+                return mapped;
             }
-        }
-
-        void sharedRow(boolean mapped, int playerId) {
-            if (mapped) {
-                sharedRowsRemapped++;
-            } else {
-                sharedRowsUnmapped++;
-                unmapped.add(playerId);
-            }
+            return destinations.contains(playerId) ? null : playerId;
         }
 
         List<Integer> unmappedSample() {
-            return unmapped.stream().limit(UNMAPPED_SAMPLE).toList();
+            return unmapped.stream().limit(ID_SAMPLE).toList();
+        }
+
+        List<Integer> collidingSample() {
+            return colliding.stream().limit(ID_SAMPLE).toList();
         }
     }
 }
