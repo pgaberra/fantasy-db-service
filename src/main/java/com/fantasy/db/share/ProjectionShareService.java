@@ -56,7 +56,8 @@ public class ProjectionShareService {
 
         return projectionShareRepository.findByProjectionIdAndUserId(projectionId, userId)
                 .orElseGet(() -> projectionShareRepository.save(ProjectionShare.create(
-                        projectionId, userId, projection.getName(), projection.getSeason(), data)));
+                        projectionId, userId, projection.getName(), projection.getSeason(), data,
+                        projection.getPlayerIdSpace())));
     }
 
     @Transactional(readOnly = true)

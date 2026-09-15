@@ -269,7 +269,7 @@ class UserProjectionControllerTest {
     @Test
     void updateAcceptsABodyWithoutPlayers() throws Exception {
         ArgumentCaptor<UpdateProjectionData> sent = ArgumentCaptor.forClass(UpdateProjectionData.class);
-        when(userProjectionService.update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), any()))
+        when(userProjectionService.update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), any(), eq(PlayerIdSpace.ESPN)))
                 .thenReturn(projection("My league"));
 
         mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID)
@@ -277,14 +277,14 @@ class UserProjectionControllerTest {
                         .content(BODY_WITHOUT_PLAYERS))
                 .andExpect(status().isOk());
 
-        verify(userProjectionService).update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), sent.capture());
+        verify(userProjectionService).update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), sent.capture(), eq(PlayerIdSpace.ESPN));
         assertThat(sent.getValue().players()).isNull();
     }
 
     @Test
     void updateStillAcceptsABodyWithPlayers() throws Exception {
         ArgumentCaptor<UpdateProjectionData> sent = ArgumentCaptor.forClass(UpdateProjectionData.class);
-        when(userProjectionService.update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), any()))
+        when(userProjectionService.update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), any(), eq(PlayerIdSpace.ESPN)))
                 .thenReturn(projection("My league"));
 
         mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID)
@@ -292,7 +292,7 @@ class UserProjectionControllerTest {
                         .content(VALID_BODY))
                 .andExpect(status().isOk());
 
-        verify(userProjectionService).update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), sent.capture());
+        verify(userProjectionService).update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), sent.capture(), eq(PlayerIdSpace.ESPN));
         assertThat(sent.getValue().players()).hasSize(1);
     }
 

@@ -1,5 +1,6 @@
 package com.fantasy.db.playerid.dto;
 
+import com.fantasy.db.projection.PlayerIdSpace;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
@@ -13,6 +14,12 @@ import java.util.List;
 public record PlayerIdRemapResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Nothing was written")
         boolean dryRun,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "The numbering rows were read in")
+        PlayerIdSpace from,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "The numbering moved rows are stamped with")
+        PlayerIdSpace to,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int projectionsScanned,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) RemapCounts playerRows,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED,

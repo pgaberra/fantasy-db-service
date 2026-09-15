@@ -115,6 +115,23 @@ class ProjectionShareServiceTest {
         assertThat(share.getData().players().getFirst().name()).isEqualTo("Connor McDavid");
     }
 
+    /**
+     * Left to the column default, a share published from a projection on ESPN's ids was stamped
+     * Yahoo, and a remap would then translate ESPN's ids as if they were Yahoo's.
+     */
+    @Test
+    void stampsTheShareWithItsProjectionsIdSpace() {
+        UserProjection onEspn = userProjectionService.create(
+                userId, "On ESPN", ProjectionKind.PROJECTION, null, projectionData(), PlayerIdSpace.ESPN);
+
+        ProjectionShare share = projectionShareService.share(
+                userId, onEspn.getId(), sharedPlayers("Connor McDavid"));
+
+        assertThat(share.getPlayerIdSpace()).isEqualTo(PlayerIdSpace.ESPN);
+        assertThat(projectionShareRepository.findById(share.getId()).orElseThrow().getPlayerIdSpace())
+                .isEqualTo(PlayerIdSpace.ESPN);
+    }
+
     @Test
     void copiesTheProjectionSettingsButNotTheYahooLeagueDetails() {
         UserProjection projection = projection();

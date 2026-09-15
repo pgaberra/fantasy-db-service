@@ -1,5 +1,6 @@
 package com.fantasy.db.projection.dto;
 
+import com.fantasy.db.projection.PlayerIdSpace;
 import com.fantasy.db.projection.ProjectionKind;
 import com.fantasy.db.projection.Season;
 import com.fantasy.db.projection.UserProjection;
@@ -16,7 +17,11 @@ public record ProjectionResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant createdAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant updatedAt,
         @Schema(description = "Who the board was copied from, on an imported projection. Absent on the user's own.")
-        ProjectionOrigin origin
+        ProjectionOrigin origin,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Which platform's numbering the player ids in data are. A caller "
+                        + "serving another platform's pool must not merge that pool into these rows.")
+        PlayerIdSpace playerIdSpace
 ) {
     public static ProjectionResponse from(UserProjection projection) {
         return new ProjectionResponse(
@@ -27,6 +32,7 @@ public record ProjectionResponse(
                 projection.getData(),
                 projection.getCreatedAt(),
                 projection.getUpdatedAt(),
-                ProjectionOrigin.from(projection));
+                ProjectionOrigin.from(projection),
+                projection.getPlayerIdSpace());
     }
 }
