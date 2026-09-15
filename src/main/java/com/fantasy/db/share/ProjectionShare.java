@@ -86,11 +86,19 @@ public class ProjectionShare {
         this.updatedAt = updatedAt;
     }
 
+    /**
+     * The id space is the shared projection's: the rows come from the same pool its rows are keyed
+     * by. Left to the column default, every share published under ESPN's pool was stamped Yahoo,
+     * which a remap would then translate as if its ids were Yahoo's.
+     */
     public static ProjectionShare create(UUID projectionId, UUID userId, String name,
-                                         Season season, SharedProjectionData data) {
+                                         Season season, SharedProjectionData data,
+                                         PlayerIdSpace playerIdSpace) {
         Instant now = Instant.now();
-        return new ProjectionShare(UUID.randomUUID(), projectionId, userId, generateToken(),
-                name, season, data, now, now);
+        ProjectionShare share = new ProjectionShare(UUID.randomUUID(), projectionId, userId,
+                generateToken(), name, season, data, now, now);
+        share.playerIdSpace = playerIdSpace.getCode();
+        return share;
     }
 
 

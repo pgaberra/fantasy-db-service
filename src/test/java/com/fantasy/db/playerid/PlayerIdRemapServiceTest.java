@@ -83,6 +83,11 @@ class PlayerIdRemapServiceTest {
 
     private UserProjection storeProjection(DraftState draft, List<PositionOverride> overrides,
                                            int... playerIds) {
+        return storeProjectionIn(PlayerIdSpace.YAHOO, draft, overrides, playerIds);
+    }
+
+    private UserProjection storeProjectionIn(PlayerIdSpace space, DraftState draft,
+                                             List<PositionOverride> overrides, int... playerIds) {
         List<PlayerProjection> players = new java.util.ArrayList<>();
         for (int playerId : playerIds) {
             players.add(new PlayerProjection(playerId, PlayerType.SKATER, stats()));
@@ -91,7 +96,7 @@ class PlayerIdRemapServiceTest {
                 UUID.randomUUID(), "League " + UUID.randomUUID(), ProjectionKind.PROJECTION, null,
                 Season.fromCode("20262027"),
                 new ProjectionData(settings(), players, draft, overrides),
-                PlayerIdSpace.YAHOO));
+                space));
     }
 
     private static DraftState draftWith(int... playerIds) {
@@ -108,15 +113,20 @@ class PlayerIdRemapServiceTest {
     }
 
     private ProjectionShare storeShare(int playerId, List<PositionOverride> overrides) {
+        return storeShareIn(PlayerIdSpace.YAHOO, playerId, overrides);
+    }
+
+    private ProjectionShare storeShareIn(PlayerIdSpace space, int playerId, List<PositionOverride> overrides) {
         return shareRepository.save(ProjectionShare.create(
                 UUID.randomUUID(), UUID.randomUUID(), "Shared", Season.fromCode("20262027"),
                 new SharedProjectionData(settings(), List.of(new SharedPlayer(
                         playerId, "Connor McDavid", "EDM", null, List.of("C"), PlayerType.SKATER,
-                        1, 512.5, stats())), overrides)));
+                        1, 512.5, stats())), overrides),
+                space));
     }
 
     private static PlayerIdRemapRequest request(boolean dryRun, PlayerIdPair... mappings) {
-        return new PlayerIdRemapRequest(List.of(mappings), dryRun);
+        return new PlayerIdRemapRequest(List.of(mappings), dryRun, null, null);
     }
 
     private static PlayerIdPair mcDavid() {
@@ -269,10 +279,50 @@ class PlayerIdRemapServiceTest {
     void anUnspecifiedDryRunIsADryRun() {
         UserProjection projection = storeProjection(null, YAHOO_MCDAVID);
 
-        assertThat(remapService.remap(new PlayerIdRemapRequest(List.of(mcDavid()), null)).dryRun())
-                .isTrue();
+        assertThat(remapService.remap(new PlayerIdRemapRequest(List.of(mcDavid()), null, null, null))
+                .dryRun()).isTrue();
         assertThat(projectionRepository.findById(projection.getId()).orElseThrow()
                 .getData().players().getFirst().playerId()).isEqualTo(YAHOO_MCDAVID);
+    }
+
+    /**
+     * The pool went back to Yahoo once it served its players again. The same rules hold with the
+     * sides swapped, and only rows stamped with the numbering being left are read: a row already
+     * on Yahoo's ids must not be translated as if it were ESPN's.
+     */
+    @Test
+    void movesRowsBackFromEspnToYahoo() {
+        UserProjection onEspn = storeProjectionIn(PlayerIdSpace.ESPN, draftWith(ESPN_MCDAVID), null,
+                ESPN_MCDAVID);
+        UserProjection onYahoo = storeProjection(null, YAHOO_MCDAVID);
+        ProjectionShare share = storeShareIn(PlayerIdSpace.ESPN, ESPN_MCDAVID, null);
+
+        PlayerIdRemapResponse response = remapService.remap(new PlayerIdRemapRequest(
+                List.of(new PlayerIdPair(ESPN_MCDAVID, YAHOO_MCDAVID)), false,
+                PlayerIdSpace.ESPN, PlayerIdSpace.YAHOO));
+
+        assertThat(response.from()).isEqualTo(PlayerIdSpace.ESPN);
+        assertThat(response.to()).isEqualTo(PlayerIdSpace.YAHOO);
+        assertThat(response.projectionsScanned()).isEqualTo(1);
+        UserProjection moved = projectionRepository.findById(onEspn.getId()).orElseThrow();
+        assertThat(moved.getData().players().getFirst().playerId()).isEqualTo(YAHOO_MCDAVID);
+        assertThat(moved.getData().draft().picks().getFirst().playerId()).isEqualTo(YAHOO_MCDAVID);
+        assertThat(moved.getPlayerIdSpace()).isEqualTo(PlayerIdSpace.YAHOO);
+        ProjectionShare movedShare = shareRepository.findById(share.getId()).orElseThrow();
+        assertThat(movedShare.getData().players().getFirst().playerId()).isEqualTo(YAHOO_MCDAVID);
+        assertThat(movedShare.getPlayerIdSpace()).isEqualTo(PlayerIdSpace.YAHOO);
+        assertThat(projectionRepository.findById(onYahoo.getId()).orElseThrow()
+                .getData().players().getFirst().playerId()).isEqualTo(YAHOO_MCDAVID);
+    }
+
+    @Test
+    void refusesToRemapANumberingOntoItself() {
+        storeProjection(null, YAHOO_MCDAVID);
+
+        assertThatThrownBy(() -> remapService.remap(new PlayerIdRemapRequest(
+                List.of(mcDavid()), false, PlayerIdSpace.YAHOO, PlayerIdSpace.YAHOO)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("itself");
     }
 
     /**

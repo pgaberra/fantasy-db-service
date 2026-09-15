@@ -26,13 +26,14 @@ public class PlayerIdRemapController {
 
     @Operation(summary = "Remap the player ids in saved projections and shares",
             description = "Applies a crosswalk of old id → new id to every projection and share "
-                    + "still keyed by Yahoo's ids, and marks them as keyed by ESPN's. Ids the "
+                    + "keyed by the `from` numbering (default yahoo), and marks them as keyed by "
+                    + "the `to` numbering (default espn). Ids the "
                     + "crosswalk does not cover are left as they are, unless another player is "
                     + "being moved to that id: such a row would be drawn as him, so it is removed. "
                     + "Defaults to a dry run: pass dryRun=false to actually write.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Remap reported, and applied unless it was a dry run"),
-            @ApiResponse(responseCode = "400", description = "The crosswalk is empty, oversized, or maps one id two ways"),
+            @ApiResponse(responseCode = "400", description = "The crosswalk is empty, oversized, or maps one id two ways, or from and to are the same numbering"),
             @ApiResponse(responseCode = "409", description = "A draft pick names a player whose old id another player is being moved to; nothing was written")
     })
     @PostMapping("/remap")

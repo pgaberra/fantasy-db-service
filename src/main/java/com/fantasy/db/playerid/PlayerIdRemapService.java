@@ -47,6 +47,10 @@ import java.util.TreeSet;
  * Dumoulin: kept, Frk's row would sit under Dumoulin's id and be drawn as him, which is neither
  * invisible nor recoverable. Such a row is removed. A draft pick like it is not, because that
  * would rewrite the draft, so any at all make an apply refuse.
+ *
+ * <p>It runs in either direction. The first migration moved everything from Yahoo's ids to
+ * ESPN's; when Yahoo served its players again the pool went back, so the same rules apply with
+ * the two sides swapped. Only rows stamped with the numbering being left are read.
  */
 @Service
 public class PlayerIdRemapService {
@@ -68,21 +72,27 @@ public class PlayerIdRemapService {
     @Transactional
     public PlayerIdRemapResponse remap(PlayerIdRemapRequest request) {
         boolean dryRun = request.isDryRun();
+        PlayerIdSpace from = request.fromSpace();
+        PlayerIdSpace to = request.toSpace();
+        if (from == to) {
+            // Stamping rows with the numbering they already carry would mark nothing as moved
+            // while translating every id: each one would become some other player.
+            throw new IllegalArgumentException("A remap has to move rows between two numberings, "
+                    + "not from " + from.getCode() + " to itself");
+        }
         Tally tally = new Tally(crosswalk(request.mappings()));
         List<Runnable> writes = new ArrayList<>();
 
-        List<UserProjection> projections =
-                projectionRepository.findAllByPlayerIdSpace(PlayerIdSpace.YAHOO.getCode());
+        List<UserProjection> projections = projectionRepository.findAllByPlayerIdSpace(from.getCode());
         for (UserProjection projection : projections) {
             ProjectionData remapped = remap(projection.getData(), tally);
-            writes.add(() -> projection.remapPlayerIds(remapped, PlayerIdSpace.ESPN));
+            writes.add(() -> projection.remapPlayerIds(remapped, to));
         }
 
-        List<ProjectionShare> shares =
-                shareRepository.findAllByPlayerIdSpace(PlayerIdSpace.YAHOO.getCode());
+        List<ProjectionShare> shares = shareRepository.findAllByPlayerIdSpace(from.getCode());
         for (ProjectionShare share : shares) {
             SharedProjectionData remapped = remap(share.getData(), tally);
-            writes.add(() -> share.remapPlayerIds(remapped, PlayerIdSpace.ESPN));
+            writes.add(() -> share.remapPlayerIds(remapped, to));
         }
 
         if (!dryRun) {
@@ -97,6 +107,8 @@ public class PlayerIdRemapService {
 
         PlayerIdRemapResponse response = new PlayerIdRemapResponse(
                 dryRun,
+                from,
+                to,
                 projections.size(),
                 tally.playerRows.counts(),
                 tally.draftPicks.counts(),
@@ -105,10 +117,12 @@ public class PlayerIdRemapService {
                 tally.sharedRows.counts(),
                 tally.unmappedSample(),
                 tally.collidingSample());
-        log.info("Player id remap ({}): {} projections, {} shares; {} player rows and {} draft "
-                        + "picks remapped, {} rows left on an id the crosswalk did not cover, {} "
+        log.info("Player id remap {} to {} ({}): {} projections, {} shares; {} player rows and {} "
+                        + "draft picks remapped, {} rows left on an id the crosswalk did not cover, {} "
                         + "removed for sitting on an id another player moves to",
-                dryRun ? "dry run" : "applied", projections.size(), shares.size(),
+                from == PlayerIdSpace.ESPN ? "espn" : "yahoo", to == PlayerIdSpace.ESPN ? "espn" : "yahoo",
+                dryRun ? "dry run" : "applied",
+                projections.size(), shares.size(),
                 tally.playerRows.remapped, tally.draftPicks.remapped,
                 tally.playerRows.unmapped + tally.draftPicks.unmapped + tally.sharedRows.unmapped
                         + tally.positionOverrides.unmapped,

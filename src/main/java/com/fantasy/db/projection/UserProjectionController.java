@@ -77,15 +77,15 @@ public class UserProjectionController {
         @ApiResponse(responseCode = "200", description = "Projection updated"),
         @ApiResponse(responseCode = "400", description = "Validation failed (blank name/data or too large)"),
         @ApiResponse(responseCode = "404", description = "No such projection for this user"),
-        @ApiResponse(responseCode = "409", description = "The user already has another projection with that name")
+        @ApiResponse(responseCode = "409", description = "The user already has another projection with that name, or the rows were built from another platform's player pool than the stored projection is keyed by")
     })
     @PutMapping("/{id}")
     public ProjectionResponse update(
             @PathVariable UUID userId,
             @PathVariable UUID id,
             @Valid @RequestBody UpdateProjectionRequest request) {
-        return ProjectionResponse.from(
-                userProjectionService.update(userId, id, request.name(), request.data()));
+        return ProjectionResponse.from(userProjectionService.update(
+                userId, id, request.name(), request.data(), request.playerIdSpace()));
     }
 
     @Operation(summary = "Delete a saved projection")

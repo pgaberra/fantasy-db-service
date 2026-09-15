@@ -1,5 +1,6 @@
 package com.fantasy.db.playerid.dto;
 
+import com.fantasy.db.projection.PlayerIdSpace;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
@@ -18,10 +19,25 @@ public record PlayerIdRemapRequest(
         @NotEmpty @Size(max = 5000) List<@Valid PlayerIdPair> mappings,
         @Schema(description = "Report what would change and write nothing. Defaults to true, so "
                 + "an unqualified call cannot rewrite anyone's projection.")
-        Boolean dryRun
+        Boolean dryRun,
+        @Schema(description = "The numbering the stored rows are moved out of: only projections and "
+                + "shares stamped with it are touched. Defaults to yahoo, the direction the first "
+                + "migration went.")
+        PlayerIdSpace from,
+        @Schema(description = "The numbering the crosswalk's new ids are in, stamped on every row "
+                + "moved. Defaults to espn.")
+        PlayerIdSpace to
 ) {
 
     public boolean isDryRun() {
         return dryRun == null || dryRun;
+    }
+
+    public PlayerIdSpace fromSpace() {
+        return from == null ? PlayerIdSpace.YAHOO : from;
+    }
+
+    public PlayerIdSpace toSpace() {
+        return to == null ? PlayerIdSpace.ESPN : to;
     }
 }

@@ -266,6 +266,39 @@ class UserProjectionServiceTest {
     }
 
     /**
+     * Rows built from another platform's pool than the stored ones would replace the user's
+     * players with whoever that pool gives those numbers to. That is what a save does in the
+     * window between switching the pool and migrating the rows, so it is refused whole.
+     */
+    @Test
+    void refusesAnUpdateBuiltFromAnotherPlatformsPool() {
+        UserProjection created = create("Old");
+        UpdateProjectionData fromEspn = new UpdateProjectionData(sampleData().settings(),
+                List.of(new PlayerProjection(
+                        3895074, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of()))),
+                null, null);
+
+        assertThatThrownBy(() -> userProjectionService.update(
+                userId, created.getId(), "New", fromEspn, PlayerIdSpace.ESPN))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Nothing was written");
+
+        UserProjection stored = userProjectionService.findById(userId, created.getId());
+        assertThat(stored.getName()).isEqualTo("Old");
+        assertThat(stored.getData().players().getFirst().playerId()).isEqualTo(1);
+    }
+
+    @Test
+    void acceptsAnUpdateFromThePoolTheRowsAreKeyedBy() {
+        UserProjection created = create("Old");
+
+        UserProjection updated = userProjectionService.update(userId, created.getId(), "New",
+                new UpdateProjectionData(sampleData().settings(), null, null, null), PlayerIdSpace.YAHOO);
+
+        assertThat(updated.getName()).isEqualTo("New");
+    }
+
+    /**
      * The point of the partial update: the ~0.5 MB of player rows do not have to be re-sent by an
      * autosave that only moved a stat weight.
      */
