@@ -16,6 +16,8 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -162,5 +164,25 @@ class UserControllerTest {
         when(userService.findById(userId)).thenThrow(new NoSuchElementException("No user"));
 
         mockMvc.perform(get("/api/v1/users/{userId}", userId)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void revokeSessionsReturns204() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/v1/users/{userId}/sessions/revoke", userId))
+                .andExpect(status().isNoContent());
+
+        verify(userService).revokeSessions(userId);
+    }
+
+    @Test
+    void revokeSessionsReturns404ForUnknownUser() throws Exception {
+        UUID userId = UUID.randomUUID();
+        doThrow(new NoSuchElementException("No user"))
+                .when(userService).revokeSessions(userId);
+
+        mockMvc.perform(post("/api/v1/users/{userId}/sessions/revoke", userId))
+                .andExpect(status().isNotFound());
     }
 }
