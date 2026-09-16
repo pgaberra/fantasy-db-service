@@ -64,6 +64,17 @@ public class UserService {
     }
 
     /**
+     * Ends every session the account holds: refresh tokens carry the token version they were
+     * issued under, and the BFF refuses one that no longer matches.
+     */
+    @Transactional
+    public void revokeSessions(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("No user found with id: " + userId));
+        user.bumpTokenVersion();
+    }
+
+    /**
      * Resolves the account for a verified Google identity: returns the user already
      * linked to this Google subject, otherwise links it to an existing account with the
      * same (verified) email, otherwise creates a new password-less Google user.

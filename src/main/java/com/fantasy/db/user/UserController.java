@@ -108,6 +108,19 @@ public class UserController {
         return UserResponse.from(userService.setUsername(userId, request.username()));
     }
 
+    @Operation(summary = "End every session the account holds",
+            description = "Bumps the account's token version, so every refresh token issued before "
+                    + "stops being accepted.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Sessions revoked"),
+        @ApiResponse(responseCode = "404", description = "No such user")
+    })
+    @PostMapping("/{userId}/sessions/revoke")
+    public ResponseEntity<Void> revokeSessions(@PathVariable UUID userId) {
+        userService.revokeSessions(userId);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "Fetch a user by id")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "User found"),
