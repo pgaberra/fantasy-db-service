@@ -66,6 +66,9 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
       existing same-email account, else creates a password-less user.
     - `POST /api/v1/users/facebook` → 200; the same for a verified Facebook identity, by
       `facebook_sub`.
+    - `POST /api/v1/users/{userId}/sessions/revoke` → 204; bumps `token_version`, which ends
+      every session the account holds ("sign out everywhere"; the BFF refuses a refresh token
+      issued under an older version). The only way a password-less account can do that.
   - `username` — the account's **public name**, nullable until the user picks one and unique
     regardless of case (a functional index on `LOWER(username)`, since "Alex" and "alex" read as
     the same name). `PUT /api/v1/users/{userId}/username` sets it; `[A-Za-z0-9_]{3,20}`. Sharing a

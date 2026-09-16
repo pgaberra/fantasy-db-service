@@ -155,4 +155,20 @@ class UserServiceTest {
         assertThatThrownBy(() -> userService.setUsername(UUID.randomUUID(), "ghost"))
                 .isInstanceOf(NoSuchElementException.class);
     }
+
+    @Test
+    void revokeSessionsBumpsTokenVersion() {
+        User user = userService.create("revoke@example.com", "hashed");
+        int before = user.getTokenVersion();
+
+        userService.revokeSessions(user.getId());
+
+        assertThat(userService.findById(user.getId()).getTokenVersion()).isEqualTo(before + 1);
+    }
+
+    @Test
+    void revokeSessionsRejectsUnknownUser() {
+        assertThatThrownBy(() -> userService.revokeSessions(UUID.randomUUID()))
+                .isInstanceOf(NoSuchElementException.class);
+    }
 }
