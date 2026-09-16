@@ -46,14 +46,29 @@ class UserServiceTest {
     }
 
     @Test
-    void linksGoogleSubToExistingPasswordAccountWithSameEmail() {
+    void linksGoogleSubToExistingVerifiedPasswordAccount_keepingItsPassword() {
         User passwordUser = userService.create("link@example.com", "hashed");
+        passwordUser.markEmailVerified();
 
         User linked = userService.findOrCreateGoogleUser("link@example.com", "google-2");
 
         assertThat(linked.getId()).isEqualTo(passwordUser.getId());
         assertThat(linked.getGoogleSub()).isEqualTo("google-2");
         assertThat(linked.getPasswordHash()).isEqualTo("hashed");
+        assertThat(linked.getTokenVersion()).isZero();
+    }
+
+    @Test
+    void linkingGoogleToAnUnverifiedPasswordAccount_dropsThePasswordAndEndsItsSessions() {
+        // Someone registered this address with a password but never proved they own it.
+        User preRegistered = userService.create("victim@example.com", "attackers-hash");
+
+        User linked = userService.findOrCreateGoogleUser("victim@example.com", "google-owner");
+
+        assertThat(linked.getId()).isEqualTo(preRegistered.getId());
+        assertThat(linked.getPasswordHash()).isNull();
+        assertThat(linked.getTokenVersion()).isEqualTo(1);
+        assertThat(linked.isEmailVerified()).isTrue();
     }
 
     @Test
@@ -75,14 +90,28 @@ class UserServiceTest {
     }
 
     @Test
-    void linksFacebookSubToExistingPasswordAccountWithSameEmail() {
+    void linksFacebookSubToExistingVerifiedPasswordAccount_keepingItsPassword() {
         User passwordUser = userService.create("fblink@example.com", "hashed");
+        passwordUser.markEmailVerified();
 
         User linked = userService.findOrCreateFacebookUser("fblink@example.com", "facebook-2");
 
         assertThat(linked.getId()).isEqualTo(passwordUser.getId());
         assertThat(linked.getFacebookSub()).isEqualTo("facebook-2");
         assertThat(linked.getPasswordHash()).isEqualTo("hashed");
+        assertThat(linked.getTokenVersion()).isZero();
+    }
+
+    @Test
+    void linkingFacebookToAnUnverifiedPasswordAccount_dropsThePasswordAndEndsItsSessions() {
+        User preRegistered = userService.create("fbvictim@example.com", "attackers-hash");
+
+        User linked = userService.findOrCreateFacebookUser("fbvictim@example.com", "facebook-owner");
+
+        assertThat(linked.getId()).isEqualTo(preRegistered.getId());
+        assertThat(linked.getPasswordHash()).isNull();
+        assertThat(linked.getTokenVersion()).isEqualTo(1);
+        assertThat(linked.isEmailVerified()).isTrue();
     }
 
     @Test
