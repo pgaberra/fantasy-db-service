@@ -82,12 +82,26 @@ public class User {
 
     public void linkGoogle(String googleSub) {
         this.googleSub = googleSub;
-        // The provider has proven ownership of this email, so linking it verifies the account.
-        this.emailVerified = true;
+        verifyThroughProvider();
     }
 
     public void linkFacebook(String facebookSub) {
         this.facebookSub = facebookSub;
+        verifyThroughProvider();
+    }
+
+    /**
+     * The provider has proven ownership of this email, so linking it verifies the account. If the
+     * account was not verified yet, its password was set by whoever registered the address first,
+     * and nothing says that was the owner: keeping it would let someone register a victim's email
+     * in advance and stay logged in once the victim signs in with the provider. So the password is
+     * dropped and every session issued so far is ended.
+     */
+    private void verifyThroughProvider() {
+        if (!emailVerified) {
+            this.passwordHash = null;
+            this.tokenVersion++;
+        }
         this.emailVerified = true;
     }
 
