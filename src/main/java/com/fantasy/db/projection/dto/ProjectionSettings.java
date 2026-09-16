@@ -33,7 +33,7 @@ public record ProjectionSettings(
         @Valid EspnSync espnSync,
         @Schema(description = "The last ESPN league this projection imported from, kept after the settings stop being the league's so a re-import does not have to be retyped. Outlives espnSync, which is cleared when the user takes the projection out of sync.")
         @Size(max = 50) String lastEspnLeagueId,
-        @Schema(description = "What the player rows started from, and so what a player who joins the pool later is seeded with: last season's stat line, or zeros. Absent on projections saved before this was recorded.")
+        @Schema(description = "What the player rows started from, and so what a player who joins the pool later is seeded with: last season's stat line, zeros, or the projection model's line. Absent on projections saved before this was recorded.")
         PlayerBasis playerBasis,
         @Schema(description = "When the player rows were last reconciled against the player pool — the finish time of the sync run they were reconciled against. Absent until the rows have been reconciled once.")
         Instant playerPoolSyncedAt,

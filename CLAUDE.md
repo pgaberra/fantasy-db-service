@@ -116,7 +116,7 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
     (`List<PlayerProjection>`). Per-player stats are validated **maps** (`stat → value`)
     keyed by the known stat vocabulary, so adding a stat needs no db-service change.
     `ProjectionSettings` also carries two fields this service only stores: `playerBasis`
-    (what the rows started from — last season's stat line or zeros) and
+    (what the rows started from — last season's stat line, zeros or the model's lines) and
     `playerPoolSyncedAt` (the sync run they were last squared with). The player pool
     changes under a saved projection all season, and the BFF is the one that can see it,
     so it reconciles the rows and writes both fields back; here they are just jsonb.
