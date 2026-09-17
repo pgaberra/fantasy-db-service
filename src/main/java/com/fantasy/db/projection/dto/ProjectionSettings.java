@@ -38,7 +38,9 @@ public record ProjectionSettings(
         @Schema(description = "When the player rows were last reconciled against the player pool — the finish time of the sync run they were reconciled against. Absent until the rows have been reconciled once.")
         Instant playerPoolSyncedAt,
         @Schema(description = "Players a reconciliation with the player pool added whom the owner has not acknowledged yet, kept so the app can go on saying so until they do. Absent once acknowledged, and on a projection nothing was ever added to. The cap matches the player list.")
-        @Size(max = 2000) List<Integer> unacknowledgedNewPlayerIds
+        @Size(max = 2000) List<Integer> unacknowledgedNewPlayerIds,
+        @Schema(description = "Per player type, whether the rows are ordered by their projected stats or by the order the owner put them in. Absent means both types are ordered by their projected stats.")
+        @Valid ManualRanking manualRanking
 ) {
 
     /** These settings with a different set of unacknowledged new players. */
@@ -46,6 +48,14 @@ public record ProjectionSettings(
         return new ProjectionSettings(scoringType, statWeights, activeScoringColumns,
                 activeUtilityColumns, scaleSettings, decimalSettings, useDefaultDecimals, leagueSize,
                 rosterSlots, minGoalieGames, yahooSync, espnSync, lastEspnLeagueId, playerBasis,
-                playerPoolSyncedAt, playerIds);
+                playerPoolSyncedAt, playerIds, manualRanking);
+    }
+
+    /** These settings with a different hand ranking. */
+    public ProjectionSettings withManualRanking(ManualRanking ranking) {
+        return new ProjectionSettings(scoringType, statWeights, activeScoringColumns,
+                activeUtilityColumns, scaleSettings, decimalSettings, useDefaultDecimals, leagueSize,
+                rosterSlots, minGoalieGames, yahooSync, espnSync, lastEspnLeagueId, playerBasis,
+                playerPoolSyncedAt, unacknowledgedNewPlayerIds, ranking);
     }
 }

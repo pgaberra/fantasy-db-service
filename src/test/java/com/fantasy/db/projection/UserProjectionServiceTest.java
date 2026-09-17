@@ -50,7 +50,8 @@ class UserProjectionServiceTest {
                 null,
                 PlayerBasis.LAST_SEASON,
                 Instant.parse("2026-08-16T04:00:00Z"),
-                List.of(1));
+                List.of(1),
+                null);
         PlayerProjection mcDavid = new PlayerProjection(
                 1, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)));
         return new ProjectionData(settings, List.of(mcDavid), null, null);

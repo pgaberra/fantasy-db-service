@@ -4,6 +4,7 @@ import com.fantasy.db.projection.dto.DraftPick;
 import com.fantasy.db.projection.dto.DraftSettings;
 import com.fantasy.db.projection.dto.DraftState;
 import com.fantasy.db.projection.dto.DraftTeam;
+import com.fantasy.db.projection.dto.ManualRanking;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.ProjectionData;
@@ -104,7 +105,7 @@ class UserProjectionControllerTest {
     private UserProjection projection(String name, DraftState draft, ProjectionKind kind) {
         ProjectionData data = new ProjectionData(
                 new ProjectionSettings(ScoringType.POINTS, Map.of("goals", 4.5), List.of("goals"),
-                        List.of("gp"), Map.of(), Map.of("goals", 0), true, 12, null, null, null, null, null, null, null, null),
+                        List.of("gp"), Map.of(), Map.of("goals", 0), true, 12, null, null, null, null, null, null, null, null, null),
                 List.of(new PlayerProjection(1, PlayerType.SKATER,
                         new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)))),
                 draft,
@@ -251,6 +252,47 @@ class UserProjectionControllerTest {
                 + "\"activeScoringColumns\":[\"goals\"],\"activeUtilityColumns\":[\"gp\"],"
                 + "\"scaleSettings\":{},\"decimalSettings\":{\"goals\":0},\"useDefaultDecimals\":true},"
                 + "\"players\":[%s]}}").formatted(players);
+    }
+
+    @Test
+    void createStoresAHandRankedOrder() throws Exception {
+        ArgumentCaptor<ProjectionData> sent = ArgumentCaptor.forClass(ProjectionData.class);
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), any(), any(), any(), any()))
+                .thenReturn(projection("My league"));
+
+        mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithManualRanking("[12, 7, 3]")))
+                .andExpect(status().isCreated());
+
+        verify(userProjectionService)
+                .create(eq(USER_ID), eq("My league"), any(), any(), sent.capture(), any());
+        ManualRanking ranking = sent.getValue().settings().manualRanking();
+        assertThat(ranking.skater().mode()).isEqualTo(RankingMode.PROJECTED);
+        assertThat(ranking.goalie().mode()).isEqualTo(RankingMode.MANUAL);
+        assertThat(ranking.goalie().order()).containsExactly(12, 7, 3);
+    }
+
+    /** The cap matches the player rows': an order can name every player and no more. */
+    @Test
+    void createReturns400OnAHandRankedOrderLongerThanThePlayerPool() throws Exception {
+        String order = IntStream.rangeClosed(1, 2001)
+                .mapToObj(Integer::toString)
+                .collect(Collectors.joining(","));
+
+        mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithManualRanking("[" + order + "]")))
+                .andExpect(status().isBadRequest());
+
+        verify(userProjectionService, never()).create(any(), any(), any(), any(), any(), any());
+    }
+
+    private static String bodyWithManualRanking(String goalieOrder) {
+        return VALID_BODY.replace("\"useDefaultDecimals\": true",
+                "\"useDefaultDecimals\": true, \"manualRanking\": {"
+                        + "\"skater\": { \"mode\": \"projected\" },"
+                        + "\"goalie\": { \"mode\": \"manual\", \"order\": " + goalieOrder + " } }");
     }
 
     /**

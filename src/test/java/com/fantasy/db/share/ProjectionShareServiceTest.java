@@ -4,6 +4,7 @@ import com.fantasy.db.projection.PlayerBasis;
 import com.fantasy.db.projection.PlayerIdSpace;
 import com.fantasy.db.projection.PlayerType;
 import com.fantasy.db.projection.ProjectionKind;
+import com.fantasy.db.projection.RankingMode;
 import com.fantasy.db.projection.ScoringType;
 import com.fantasy.db.projection.SkaterPosition;
 import com.fantasy.db.projection.Season;
@@ -17,6 +18,8 @@ import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
+import com.fantasy.db.projection.dto.ManualRanking;
+import com.fantasy.db.projection.dto.PlayerTypeRanking;
 import com.fantasy.db.projection.dto.YahooSync;
 import com.fantasy.db.share.dto.SharedPlayer;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,7 +79,10 @@ class ProjectionShareServiceTest {
                 "123456",
                 PlayerBasis.LAST_SEASON,
                 Instant.parse("2026-08-16T04:00:00Z"),
-                List.of(1));
+                List.of(1),
+                new ManualRanking(
+                        new PlayerTypeRanking(RankingMode.PROJECTED, null),
+                        new PlayerTypeRanking(RankingMode.MANUAL, List.of(7, 3))));
         PlayerProjection mcDavid = new PlayerProjection(
                 1, PlayerType.SKATER, new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)));
         return new ProjectionData(settings, List.of(mcDavid), null,
@@ -150,6 +156,24 @@ class ProjectionShareServiceTest {
         assertThat(share.getData().settings().playerPoolSyncedAt()).isNull();
         // The owner's unread notice would otherwise follow the board into every import.
         assertThat(share.getData().settings().unacknowledgedNewPlayerIds()).isNull();
+    }
+
+    /**
+     * The hand ranking is the order the published page is in, so it travels with the board the
+     * way the position corrections do. Stripping it would make an import of the link rank by
+     * stats the author deliberately did not rank by.
+     */
+    @Test
+    void keepsTheHandRanking() {
+        UserProjection projection = projection();
+
+        ProjectionShare share = projectionShareService.share(
+                userId, projection.getId(), sharedPlayers("Connor McDavid"));
+
+        assertThat(share.getData().settings().manualRanking().goalie().mode())
+                .isEqualTo(RankingMode.MANUAL);
+        assertThat(share.getData().settings().manualRanking().goalie().order())
+                .containsExactly(7, 3);
     }
 
     @Test

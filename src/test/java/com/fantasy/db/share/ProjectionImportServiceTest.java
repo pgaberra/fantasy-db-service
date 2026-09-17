@@ -80,7 +80,7 @@ class ProjectionImportServiceTest {
                 new EspnSync("ESPN League", "123456", Instant.parse("2026-08-01T10:00:00Z")),
                 "123456",
                 PlayerBasis.LAST_SEASON,
-                Instant.parse("2026-08-16T04:00:00Z"), null);
+                Instant.parse("2026-08-16T04:00:00Z"), null, null);
         return new ProjectionData(settings, List.of(
                 new PlayerProjection(1, PlayerType.SKATER,
                         new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0))),
