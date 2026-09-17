@@ -54,12 +54,15 @@ public class UserProjectionController {
         return ProjectionResponse.from(userProjectionService.findById(userId, id));
     }
 
-    @Operation(summary = "Save a new projection for a user")
+    @Operation(summary = "Save a new projection for a user; a name the user already holds is "
+            + "numbered (\"My league (2)\") rather than refused, so the saved name is the one in "
+            + "the response")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Projection created"),
         @ApiResponse(responseCode = "400", description = "Validation failed (blank name/data or too large)"),
         @ApiResponse(responseCode = "409",
-                description = "The user already has a projection of that kind, or one with that name")
+                description = "The user already has a draft against that preset, or a request "
+                        + "racing this one took the name")
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

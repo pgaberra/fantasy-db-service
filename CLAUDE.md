@@ -104,14 +104,18 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
     per preset** (`ProjectionPreset`: `last_season` or `model`), and a second for the same preset
     is a 409. A user's own projections are unlimited, now that one can be started from a copy of
     another and kept beside it. `IMPORTED` never was limited: drafting against two friends'
-    boards is a normal thing to want, and so is copying the **same** board twice. The name is what has to stay distinct, and `ProjectionImportService`
-    settles that rather than refusing: with no `name` in the request it asks
-    `UserProjectionService.freeNameFrom` for one, which is the shared name or `"… (2)"`,
-    `"… (3)"` and so on — the same shape `V19` used to break the ties already in the table,
-    and truncated the same way so the suffix fits the hundred characters a name gets. A name
-    the **caller** chose is still refused with a 409 when it is taken: that one they can see
-    and change. Repeat imports used to 409 either way, which left whoever pressed the button
-    on a share page to go and sort the naming out themselves.
+    boards is a normal thing to want, and so is copying the **same** board twice. The name is
+    what has to stay distinct, and **create settles a clash rather than refusing it**:
+    `UserProjectionService.create` asks `freeNameFrom` for a name, which is the one the caller
+    sent or `"… (2)"`, `"… (3)"` and so on — the same shape `V19` used to break the ties
+    already in the table, and truncated the same way so the suffix fits the hundred characters
+    a name gets. So the saved name is **the one in the response**, not necessarily the one that
+    was sent, and a caller that shows it has to read it back. `ProjectionImportService` does the
+    same for a board imported with no `name` (a name the **importer** typed is still refused —
+    that one they can see and change). A **rename** is refused with a 409 too: there the name is
+    the whole of what was asked for, and the page that asked can say so. Create used to 409 on a
+    taken name, which threw away work a user had already done over something they could rename
+    afterwards.
     An imported row is stamped with `origin_share_token` and `origin_author_username`
     (surfaced as `ProjectionOrigin` on both responses), snapshotted at import time so the
     credit survives the share going away.
