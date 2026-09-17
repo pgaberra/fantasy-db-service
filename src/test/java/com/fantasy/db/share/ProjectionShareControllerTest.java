@@ -8,6 +8,7 @@ import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.ProjectionSettings;
 import com.fantasy.db.share.dto.SharedPlayer;
 import com.fantasy.db.share.dto.SharedProjectionData;
+import com.fantasy.db.user.UserAvatar;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +19,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -134,15 +136,48 @@ class ProjectionShareControllerTest {
     @Test
     void servesASnapshotByToken() throws Exception {
         when(projectionShareService.findByToken("s0mErAnd0mT0k3nV4lu3ab"))
-                .thenReturn(new SharedProjection(share(), "alex"));
+                .thenReturn(new SharedProjection(share(), "alex", null));
 
         mockMvc.perform(get("/api/v1/shares/s0mErAnd0mT0k3nV4lu3ab"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("My league"))
                 .andExpect(jsonPath("$.authorUsername").value("alex"))
+                .andExpect(jsonPath("$.authorAvatarUpdatedAt").doesNotExist())
                 .andExpect(jsonPath("$.season").value("20262027"))
                 .andExpect(jsonPath("$.data.players[0].name").value("Connor McDavid"))
                 .andExpect(jsonPath("$.data.players[0].rank").value(1));
+    }
+
+    @Test
+    void stampsTheSnapshotWhenTheAuthorHasAPicture() throws Exception {
+        when(projectionShareService.findByToken("s0mErAnd0mT0k3nV4lu3ab"))
+                .thenReturn(new SharedProjection(
+                        share(), "alex", Instant.parse("2026-09-01T10:00:00Z")));
+
+        mockMvc.perform(get("/api/v1/shares/s0mErAnd0mT0k3nV4lu3ab"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authorAvatarUpdatedAt").value("2026-09-01T10:00:00Z"));
+    }
+
+    @Test
+    void servesTheAuthorsPictureByToken() throws Exception {
+        byte[] png = {(byte) 0x89, 'P', 'N', 'G', 1, 2, 3};
+        when(projectionShareService.findAuthorAvatar("s0mErAnd0mT0k3nV4lu3ab"))
+                .thenReturn(UserAvatar.of(USER_ID, "image/png", png));
+
+        mockMvc.perform(get("/api/v1/shares/s0mErAnd0mT0k3nV4lu3ab/avatar"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contentType").value("image/png"))
+                .andExpect(jsonPath("$.data").value(Base64.getEncoder().encodeToString(png)));
+    }
+
+    @Test
+    void returnsNotFoundWhenTheAuthorHasNoPicture() throws Exception {
+        when(projectionShareService.findAuthorAvatar("s0mErAnd0mT0k3nV4lu3ab"))
+                .thenThrow(new NoSuchElementException("No avatar for that share's author"));
+
+        mockMvc.perform(get("/api/v1/shares/s0mErAnd0mT0k3nV4lu3ab/avatar"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

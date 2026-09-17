@@ -189,8 +189,13 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
   - `ProjectionShareController` — `/api/v1/users/{userId}/projections/{projectionId}/share`
     (get/put, ownership-scoped). `SharedProjectionController` —
     `GET /api/v1/shares/{token}`, the snapshot the BFF serves publicly; it returns no owner
-    identity beyond their public username, which is read **live** rather than snapshotted so a
-    rename follows onto links already shared. It deliberately counts nothing: the share is fetched once for a
+    identity beyond their public username and the stamp on their profile picture
+    (`authorAvatarUpdatedAt`, absent where they have none), both read **live** rather than
+    snapshotted so a rename or a new picture follows onto links already shared.
+    `GET /api/v1/shares/{token}/avatar` serves that picture, looked up by token alone so the
+    caller serving the public page never learns whose account it is; the snapshot carries the
+    stamp rather than the bytes, so half a megabyte of image stays out of every page load and the
+    picture is cached under a URL that changes when it does. It deliberately counts nothing: the share is fetched once for a
     chat client's link preview and again for its card, so a per-read counter measured crawlers
     rather than people (V13 dropped the column).
 - `passwordreset/` and `emailverification/` — single-use tokens:

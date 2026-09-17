@@ -11,6 +11,8 @@ import com.fantasy.db.projection.Season;
 import com.fantasy.db.projection.UserProjection;
 import com.fantasy.db.projection.UserProjectionService;
 import com.fantasy.db.user.User;
+import com.fantasy.db.user.UserAvatar;
+import com.fantasy.db.user.UserAvatarRepository;
 import com.fantasy.db.user.UserRepository;
 import com.fantasy.db.projection.dto.EspnSync;
 import com.fantasy.db.projection.dto.PlayerProjection;
@@ -52,6 +54,9 @@ class ProjectionShareServiceTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private UserAvatarRepository userAvatarRepository;
 
     private UUID userId;
 
@@ -225,6 +230,42 @@ class ProjectionShareServiceTest {
         userRepository.save(owner);
 
         assertThat(projectionShareService.findByToken(token).authorUsername()).isEqualTo("alexander");
+    }
+
+    @Test
+    void readsTheOwnersPictureStamp_soANewPictureFollowsOntoLinksAlreadyShared() {
+        UserProjection projection = projection();
+        String token = projectionShareService.share(
+                userId, projection.getId(), sharedPlayers("Connor McDavid")).getToken();
+
+        assertThat(projectionShareService.findByToken(token).authorAvatarUpdatedAt()).isNull();
+
+        userAvatarRepository.save(UserAvatar.of(userId, "image/png", new byte[] {1, 2, 3}));
+
+        assertThat(projectionShareService.findByToken(token).authorAvatarUpdatedAt()).isNotNull();
+    }
+
+    @Test
+    void servesTheOwnersPictureByTokenAlone() {
+        UserProjection projection = projection();
+        String token = projectionShareService.share(
+                userId, projection.getId(), sharedPlayers("Connor McDavid")).getToken();
+        userAvatarRepository.save(UserAvatar.of(userId, "image/png", new byte[] {1, 2, 3}));
+
+        UserAvatar avatar = projectionShareService.findAuthorAvatar(token);
+
+        assertThat(avatar.getContentType()).isEqualTo("image/png");
+        assertThat(avatar.getData()).containsExactly(1, 2, 3);
+    }
+
+    @Test
+    void hasNoPictureToServeWhenTheOwnerHasNone() {
+        UserProjection projection = projection();
+        String token = projectionShareService.share(
+                userId, projection.getId(), sharedPlayers("Connor McDavid")).getToken();
+
+        assertThatThrownBy(() -> projectionShareService.findAuthorAvatar(token))
+                .isInstanceOf(NoSuchElementException.class);
     }
 
     /**
