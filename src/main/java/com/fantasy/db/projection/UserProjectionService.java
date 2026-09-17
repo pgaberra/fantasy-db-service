@@ -52,16 +52,17 @@ public class UserProjectionService {
         // points, and drafting against one is no reason to be barred from the other. Reject a
         // second with a conflict (DataIntegrityViolationException -> 409, see
         // GlobalExceptionHandler). Projections a user makes and boards they import are not
-        // limited in number, only in what they may be called. The season is stamped from config,
-        // not supplied by the caller.
+        // limited in number, and a name they already hold is numbered rather than refused. The
+        // season is stamped from config, not supplied by the caller.
         if (alreadyHas(userId, kind, preset)) {
             throw new DataIntegrityViolationException(
                     "User already has a projection of kind " + kind.getCode()
                             + (preset == null ? "" : " for preset " + preset.getCode()));
         }
-        requireFreeName(userId, name, kind, null);
+        String savedName = freeNameFrom(userId, name, kind);
+        requireFreeName(userId, savedName, kind, null);
         return userProjectionRepository.save(
-                UserProjection.create(userId, name, kind, preset, currentSeason, data, playerIdSpace));
+                UserProjection.create(userId, savedName, kind, preset, currentSeason, data, playerIdSpace));
     }
 
     private boolean alreadyHas(UUID userId, ProjectionKind kind, ProjectionPreset preset) {
@@ -82,6 +83,10 @@ public class UserProjectionService {
      * <p>The partial unique index added in V19 says the same thing and is what makes it true under
      * a race. This check is what makes the failure legible: it names the projection that is in the
      * way, before a row is written.
+     *
+     * <p>This is the refusal a <b>rename</b> gets, and the last word after a create or an import
+     * has already settled on a name with {@link #freeNameFrom}: there the name is free by the time
+     * it is checked, so only a request racing this one can trip it.
      *
      * <p>Public because there are two write paths into this table and one rule over both: a
      * projection created here, and a board imported by {@code ProjectionImportService}. A copy of
@@ -114,9 +119,14 @@ public class UserProjectionService {
      * cap would otherwise grow past it.
      *
      * <p>Bounded, and the bound is not a formality: the unique index is what actually settles a
-     * race, so two imports landing together can still collide on a name this found free a moment
+     * race, so two writes landing together can still collide on a name this found free a moment
      * ago. Running out returns the preferred name and lets {@link #requireFreeName} refuse it,
-     * which is the answer the caller used to get for every repeat import.
+     * which is the answer the caller used to get for every repeat.
+     *
+     * <p>Every create goes through here, not only an import. Saving a board is not a question the
+     * server should answer with "no": the numbers a user came for are already made, and a name
+     * they can rename afterwards is a smaller thing than losing the save. A <b>rename</b> is still
+     * refused, because there the name is the whole of what was asked for.
      */
     public String freeNameFrom(UUID userId, String preferred, ProjectionKind kind) {
         if (kind == ProjectionKind.PRESET_DRAFT || !isTaken(userId, preferred)) {
