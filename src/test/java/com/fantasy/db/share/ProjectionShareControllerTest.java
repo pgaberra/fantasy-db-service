@@ -71,7 +71,7 @@ class ProjectionShareControllerTest {
     private static ProjectionShare share() {
         ProjectionSettings settings = new ProjectionSettings(
                 ScoringType.POINTS, Map.of("goals", 4.5), List.of("goals"), List.of("gp"),
-                Map.of(), Map.of("goals", 0), true, 12, null, null, null, null, null, null, null, null);
+                Map.of(), Map.of("goals", 0), true, 12, null, null, null, null, null, null, null, null, null);
         SharedPlayer mcDavid = new SharedPlayer(
                 1, "Connor McDavid", "EDM", "https://example.test/mcdavid.png", List.of("C"),
                 PlayerType.SKATER, 1, 412.5,

@@ -9,7 +9,9 @@ import com.fantasy.db.projection.UserProjection;
 import com.fantasy.db.projection.UserProjectionRepository;
 import com.fantasy.db.projection.dto.DraftPick;
 import com.fantasy.db.projection.dto.DraftState;
+import com.fantasy.db.projection.dto.ManualRanking;
 import com.fantasy.db.projection.dto.PlayerProjection;
+import com.fantasy.db.projection.dto.PlayerTypeRanking;
 import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
@@ -162,22 +164,47 @@ public class PlayerIdRemapService {
     }
 
     /**
-     * The new players the owner has yet to acknowledge are named by id, so they move with the
+     * The settings name players by id in two places - the new ones the owner has yet to
+     * acknowledge, and the order they put a hand-ranked player type in - so both move with the
      * rows they point at: an id the crosswalk does not cover stays, as a row's does, and one on a
-     * colliding id goes, as its row does.
+     * colliding id goes, as its row does. A hand ranking left on the old numbering would order
+     * the board by players who are no longer there.
      */
     private static ProjectionSettings remap(ProjectionSettings settings, Tally tally) {
-        if (settings == null || settings.unacknowledgedNewPlayerIds() == null) {
-            return settings;
+        if (settings == null) {
+            return null;
         }
-        List<Integer> ids = new ArrayList<>();
-        for (Integer playerId : settings.unacknowledgedNewPlayerIds()) {
+        ProjectionSettings remapped = settings;
+        if (settings.unacknowledgedNewPlayerIds() != null) {
+            remapped = remapped.withUnacknowledgedNewPlayerIds(
+                    remapIds(settings.unacknowledgedNewPlayerIds(), tally));
+        }
+        if (settings.manualRanking() != null) {
+            remapped = remapped.withManualRanking(remap(settings.manualRanking(), tally));
+        }
+        return remapped;
+    }
+
+    private static ManualRanking remap(ManualRanking ranking, Tally tally) {
+        return new ManualRanking(remap(ranking.skater(), tally), remap(ranking.goalie(), tally));
+    }
+
+    private static PlayerTypeRanking remap(PlayerTypeRanking ranking, Tally tally) {
+        if (ranking.order() == null) {
+            return ranking;
+        }
+        return new PlayerTypeRanking(ranking.mode(), remapIds(ranking.order(), tally));
+    }
+
+    private static List<Integer> remapIds(List<Integer> playerIds, Tally tally) {
+        List<Integer> ids = new ArrayList<>(playerIds.size());
+        for (Integer playerId : playerIds) {
             Integer placed = tally.placeUncounted(playerId);
             if (placed != null) {
                 ids.add(placed);
             }
         }
-        return settings.withUnacknowledgedNewPlayerIds(ids);
+        return ids;
     }
 
     private List<PositionOverride> remapOverrides(List<PositionOverride> overrides, Tally tally) {

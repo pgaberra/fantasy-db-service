@@ -90,6 +90,10 @@ public class ProjectionShareService {
      * with them: a share is a frozen snapshot, so how its rows would be kept in step with the
      * player pool no longer says anything. So do the new players the owner has not acknowledged:
      * that notice is theirs, and an import would otherwise hand it to someone else.
+     *
+     * <p>A hand ranking is kept, for the reason the author's position corrections are: the board
+     * on the page was ordered by it, and a copy that went back to the projected order would rank
+     * differently from the page it was copied from.
      */
     private ProjectionSettings publishable(ProjectionSettings settings) {
         return new ProjectionSettings(
@@ -107,6 +111,8 @@ public class ProjectionShareService {
                 null,
                 null,
                 null,
-                null, null);
+                null,
+                null,
+                settings.manualRanking());
     }
 }

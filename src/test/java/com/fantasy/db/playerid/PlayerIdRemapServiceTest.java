@@ -7,6 +7,7 @@ import com.fantasy.db.projection.PlayerBasis;
 import com.fantasy.db.projection.PlayerIdSpace;
 import com.fantasy.db.projection.PlayerType;
 import com.fantasy.db.projection.ProjectionKind;
+import com.fantasy.db.projection.RankingMode;
 import com.fantasy.db.projection.ScoringType;
 import com.fantasy.db.projection.SkaterPosition;
 import com.fantasy.db.projection.Season;
@@ -16,8 +17,10 @@ import com.fantasy.db.projection.dto.DraftPick;
 import com.fantasy.db.projection.dto.DraftSettings;
 import com.fantasy.db.projection.dto.DraftState;
 import com.fantasy.db.projection.dto.DraftTeam;
+import com.fantasy.db.projection.dto.ManualRanking;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
+import com.fantasy.db.projection.dto.PlayerTypeRanking;
 import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
@@ -72,7 +75,7 @@ class PlayerIdRemapServiceTest {
                 12,
                 null, null, null, null, null,
                 PlayerBasis.LAST_SEASON,
-                Instant.parse("2026-08-16T04:00:00Z"), null);
+                Instant.parse("2026-08-16T04:00:00Z"), null, null);
     }
 
     private static PlayerStats stats() {
@@ -264,6 +267,49 @@ class PlayerIdRemapServiceTest {
 
         ProjectionData stored = projectionRepository.findById(projection.getId()).orElseThrow().getData();
         assertThat(stored.settings().unacknowledgedNewPlayerIds()).containsExactly(ESPN_MCDAVID, YAHOO_UNKNOWN);
+    }
+
+    @Test
+    void remapsAHandRankedOrder() {
+        UserProjection projection = projectionRepository.save(UserProjection.create(
+                UUID.randomUUID(), "League " + UUID.randomUUID(), ProjectionKind.PROJECTION, null,
+                Season.fromCode("20262027"),
+                new ProjectionData(
+                        settings().withManualRanking(new ManualRanking(
+                                new PlayerTypeRanking(RankingMode.MANUAL,
+                                        List.of(YAHOO_MCDAVID, YAHOO_UNKNOWN)),
+                                new PlayerTypeRanking(RankingMode.PROJECTED, null))),
+                        List.of(new PlayerProjection(YAHOO_MCDAVID, PlayerType.SKATER, stats())),
+                        null, null),
+                PlayerIdSpace.YAHOO));
+
+        remapService.remap(request(false, mcDavid()));
+
+        ProjectionData stored = projectionRepository.findById(projection.getId()).orElseThrow().getData();
+        assertThat(stored.settings().manualRanking().skater().order())
+                .containsExactly(ESPN_MCDAVID, YAHOO_UNKNOWN);
+        assertThat(stored.settings().manualRanking().goalie().order()).isNull();
+    }
+
+    /** A hand-placed player whose id another player moves onto goes, as his row does. */
+    @Test
+    void dropsACollidingIdFromAHandRankedOrder() {
+        UserProjection projection = projectionRepository.save(UserProjection.create(
+                UUID.randomUUID(), "League " + UUID.randomUUID(), ProjectionKind.PROJECTION, null,
+                Season.fromCode("20262027"),
+                new ProjectionData(
+                        settings().withManualRanking(new ManualRanking(
+                                new PlayerTypeRanking(RankingMode.MANUAL,
+                                        List.of(YAHOO_FRK, YAHOO_UNKNOWN)),
+                                new PlayerTypeRanking(RankingMode.PROJECTED, List.of()))),
+                        List.of(new PlayerProjection(YAHOO_FRK, PlayerType.SKATER, stats())),
+                        null, null),
+                PlayerIdSpace.YAHOO));
+
+        remapService.remap(request(false, dumoulin()));
+
+        ProjectionData stored = projectionRepository.findById(projection.getId()).orElseThrow().getData();
+        assertThat(stored.settings().manualRanking().skater().order()).containsExactly(YAHOO_UNKNOWN);
     }
 
     /** Everything else on the row is the user's work and must come back untouched. */

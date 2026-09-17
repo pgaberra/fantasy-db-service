@@ -130,6 +130,10 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
     to the read model's positions — and `PlayerIdRemapService` remaps its ids along with the
     rest, since an override left on the old id would attach to whoever the new space
     numbers that way.
+    `manualRanking` holds, per player type, whether the rows are ordered by their projected
+    stats or by the order the owner put them in, and the ids they placed by hand (best first,
+    the rest falling in below them by projected value). A type left at `projected` is what a
+    projection saved before this had. Like the overrides, its ids are remapped.
   - `Season` / `ScoringType` / `PlayerType` / `ProjectionKind` / `ProjectionPreset` /
     `PlayerBasis` / `PlayerIdSpace` — enums with `@JsonValue` codes (`20262027`, `points`,
     `skater`, `preset_draft`, `model`, `last_season`, `espn`).

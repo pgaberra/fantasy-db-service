@@ -51,7 +51,7 @@ class ProjectionImportControllerTest {
         ProjectionData data = new ProjectionData(
                 new ProjectionSettings(ScoringType.POINTS, Map.of("goals", 4.5), List.of("goals"),
                         List.of("gp"), Map.of(), Map.of("goals", 0), true, 12, null, null, null, null,
-                        null, null, null, null),
+                        null, null, null, null, null),
                 List.of(new PlayerProjection(1, PlayerType.SKATER,
                         new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 64.0)))),
                 null,
