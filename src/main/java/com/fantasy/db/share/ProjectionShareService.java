@@ -3,6 +3,8 @@ package com.fantasy.db.share;
 import com.fantasy.db.projection.UserProjection;
 import com.fantasy.db.projection.UserProjectionRepository;
 import com.fantasy.db.user.User;
+import com.fantasy.db.user.UserAvatar;
+import com.fantasy.db.user.UserAvatarRepository;
 import com.fantasy.db.user.UserRepository;
 import com.fantasy.db.projection.dto.ProjectionSettings;
 import com.fantasy.db.share.dto.SharedPlayer;
@@ -20,13 +22,16 @@ public class ProjectionShareService {
     private final ProjectionShareRepository projectionShareRepository;
     private final UserProjectionRepository userProjectionRepository;
     private final UserRepository userRepository;
+    private final UserAvatarRepository userAvatarRepository;
 
     public ProjectionShareService(ProjectionShareRepository projectionShareRepository,
                                   UserProjectionRepository userProjectionRepository,
-                                  UserRepository userRepository) {
+                                  UserRepository userRepository,
+                                  UserAvatarRepository userAvatarRepository) {
         this.projectionShareRepository = projectionShareRepository;
         this.userProjectionRepository = userProjectionRepository;
         this.userRepository = userRepository;
+        this.userAvatarRepository = userAvatarRepository;
     }
 
     /**
@@ -68,8 +73,11 @@ public class ProjectionShareService {
     }
 
     /**
-     * The snapshot plus the owner's current name. The name is read now rather than copied at
-     * share time, so renaming an account follows onto links already out there.
+     * The snapshot plus the owner's current name and the stamp on their picture. Both are read now
+     * rather than copied at share time, so renaming an account or changing its picture follows
+     * onto links already out there. Only the stamp travels with the snapshot; the picture itself
+     * is fetched by {@link #findAuthorAvatar(String)}, so a page that draws it asks for the bytes
+     * once and caches them under that stamp.
      */
     @Transactional(readOnly = true)
     public SharedProjection findByToken(String token) {
@@ -78,7 +86,20 @@ public class ProjectionShareService {
         String authorUsername = userRepository.findById(share.getUserId())
                 .map(User::getUsername)
                 .orElseThrow(() -> new NoSuchElementException("No user found for that share"));
-        return new SharedProjection(share, authorUsername);
+        return new SharedProjection(share, authorUsername,
+                userAvatarRepository.findUpdatedAtByUserId(share.getUserId()).orElse(null));
+    }
+
+    /**
+     * The picture of the account behind a link, looked up by the token alone: the caller serving
+     * the public page never learns whose account it is.
+     */
+    @Transactional(readOnly = true)
+    public UserAvatar findAuthorAvatar(String token) {
+        ProjectionShare share = projectionShareRepository.findByToken(token)
+                .orElseThrow(() -> new NoSuchElementException("No share found for that token"));
+        return userAvatarRepository.findById(share.getUserId())
+                .orElseThrow(() -> new NoSuchElementException("No avatar for that share's author"));
     }
 
 
