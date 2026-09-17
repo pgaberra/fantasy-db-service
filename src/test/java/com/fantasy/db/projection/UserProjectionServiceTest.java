@@ -106,29 +106,59 @@ class UserProjectionServiceTest {
         assertThat(created.getSeason()).isEqualTo(Season.SEASON_2026_2027);
     }
 
+    /**
+     * A create settles a taken name rather than refusing it: the work is already done by the time
+     * it is saved, and a name the owner can change afterwards is a smaller thing than losing it.
+     * The numbering is the one {@code freeNameFrom} does for a share import, so a spreadsheet
+     * board and a copied one come out named alike.
+     */
     @Test
-    void enforcesUniqueNamePerUser() {
+    void numbersANameTheUserAlreadyHolds() {
         create("Dynasty");
 
-        assertThatThrownBy(() -> create("Dynasty"))
-                .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("Dynasty");
+        UserProjection second = create("Dynasty");
+
+        assertThat(second.getName()).isEqualTo("Dynasty (2)");
+        assertThat(create("Dynasty").getName()).isEqualTo("Dynasty (3)");
+    }
+
+    @Test
+    void keepsTheNameTheCallerAskedForWhenItIsFree() {
+        UserProjection created = create("Dynasty");
+
+        assertThat(created.getName()).isEqualTo("Dynasty");
     }
 
     /**
      * The two kinds a user names share one namespace. They are listed together and read by name,
      * so a projection and an imported board under the same name are told apart only by the
-     * smaller line beneath them — which is what this rule exists to prevent.
+     * smaller line beneath them — which is why the second one is numbered.
      */
     @Test
-    void enforcesUniqueNameAcrossOwnProjectionsAndImportedBoards() {
+    void numbersAcrossOwnProjectionsAndImportedBoards() {
         create("Erik's board");
 
-        assertThatThrownBy(() -> userProjectionService.create(
-                userId, "Erik's board", ProjectionKind.IMPORTED, null, sampleData(), PlayerIdSpace.YAHOO))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        UserProjection imported = userProjectionService.create(
+                userId, "Erik's board", ProjectionKind.IMPORTED, null, sampleData(), PlayerIdSpace.YAHOO);
+
+        assertThat(imported.getName()).isEqualTo("Erik's board (2)");
     }
 
+    /** The suffix has to fit the hundred characters a name gets, so the name is trimmed to make room. */
+    @Test
+    void trimsANameAtTheCapToFitTheNumber() {
+        String atTheCap = "N".repeat(100);
+        create(atTheCap);
+
+        UserProjection second = create(atTheCap);
+
+        assertThat(second.getName()).hasSize(100).endsWith(" (2)");
+    }
+
+    /**
+     * A rename is refused where a create is numbered: there the name is the whole of what was
+     * asked for, and the page that asked can say so.
+     */
     @Test
     void enforcesUniqueNameWhenAProjectionIsRenamed() {
         create("First");
@@ -160,7 +190,7 @@ class UserProjectionServiceTest {
 
         UserProjection own = create("AI Projection");
 
-        assertThat(own.getId()).isNotNull();
+        assertThat(own.getName()).isEqualTo("AI Projection");
         assertThat(userProjectionService.findAll(userId)).hasSize(2);
     }
 
@@ -175,7 +205,7 @@ class UserProjectionServiceTest {
         UserProjection preset = userProjectionService.create(
                 userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT, null, sampleData(), PlayerIdSpace.YAHOO);
 
-        assertThat(preset.getId()).isNotNull();
+        assertThat(preset.getName()).isEqualTo("Last Season's Stats");
         assertThat(userProjectionService.findAll(userId)).hasSize(2);
     }
 
@@ -186,13 +216,13 @@ class UserProjectionServiceTest {
         UserProjection other = userProjectionService.create(
                 UUID.randomUUID(), "Standard", ProjectionKind.PROJECTION, null, sampleData(), PlayerIdSpace.YAHOO);
 
-        assertThat(other.getId()).isNotNull();
+        assertThat(other.getName()).isEqualTo("Standard");
     }
 
     /**
      * A user may keep as many projections as they like — one started from a copy of another is
      * the point of allowing it. What still tells two apart is the name, which
-     * {@link #enforcesUniqueNamePerUser()} covers.
+     * {@link #numbersANameTheUserAlreadyHolds()} covers.
      */
     @Test
     void allowsASecondProjectionForTheSameUser() {

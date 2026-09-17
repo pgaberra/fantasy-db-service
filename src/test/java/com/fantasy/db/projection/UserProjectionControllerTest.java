@@ -295,14 +295,32 @@ class UserProjectionControllerTest {
                         + "\"goalie\": { \"mode\": \"manual\", \"order\": " + goalieOrder + " } }");
     }
 
+    /**
+     * A taken name is numbered rather than refused, so what the caller has to read back is the
+     * name in the response, not the one it sent.
+     */
     @Test
-    void createReturns409WhenTheNameIsTaken() throws Exception {
+    void createAnswersWithTheNameTheProjectionWasSavedUnder() throws Exception {
         when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PROJECTION), any(), any(), any()))
-                .thenThrow(new DataIntegrityViolationException("Name already taken"));
+                .thenReturn(projection("My league (2)"));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("My league (2)"));
+    }
+
+    /** The conflict a create can still answer with: a second draft against the same preset. */
+    @Test
+    void createReturns409WhenTheUserAlreadyHasADraftAgainstThatPreset() throws Exception {
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any(), any(), any()))
+                .thenThrow(new DataIntegrityViolationException("User already has a projection of kind preset_draft"));
+
+        mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY.replace("\"name\": \"My league\",",
+                                "\"name\": \"My league\", \"kind\": \"preset_draft\",")))
                 .andExpect(status().isConflict());
     }
 
