@@ -1,6 +1,7 @@
 package com.fantasy.db.projection;
 
 import com.fantasy.db.projection.dto.DraftPick;
+import com.fantasy.db.projection.dto.DraftSettings;
 import com.fantasy.db.projection.dto.DraftState;
 import com.fantasy.db.projection.dto.DraftTeam;
 import com.fantasy.db.projection.dto.PlayerProjection;
@@ -117,7 +118,8 @@ class UserProjectionControllerTest {
                 List.of(new DraftTeam("t1", "Me", true)),
                 List.of("t1"),
                 List.of(new DraftPick(1, "t1")),
-                finishedAt);
+                finishedAt,
+                null);
     }
 
     @Test
@@ -279,6 +281,73 @@ class UserProjectionControllerTest {
 
         verify(userProjectionService).update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), sent.capture(), eq(PlayerIdSpace.ESPN));
         assertThat(sent.getValue().players()).isNull();
+    }
+
+    /** A body whose draft carries its own league, with the goalie minimum set to {@code games}. */
+    private static String bodyWithDraftLeague(int games) {
+        return """
+                {
+                  "name": "My league",
+                  "playerIdSpace": "espn",
+                  "data": {
+                    "settings": {
+                      "scoringType": "points",
+                      "statWeights": { "goals": 4.5 },
+                      "activeScoringColumns": ["goals"],
+                      "activeUtilityColumns": ["gp"],
+                      "scaleSettings": {},
+                      "decimalSettings": { "goals": 0 },
+                      "useDefaultDecimals": true
+                    },
+                    "draft": {
+                      "teams": [{ "id": "t1", "name": "Me", "mine": true }],
+                      "order": ["t1"],
+                      "picks": [],
+                      "settings": {
+                        "scoringType": "category",
+                        "statWeights": { "goals": 4.5 },
+                        "activeScoringColumns": ["goals", "hits"],
+                        "activeUtilityColumns": ["gp"],
+                        "leagueSize": 10,
+                        "rosterSlots": { "c": 2, "lw": 2, "rw": 2, "d": 4, "util": 1, "bn": 4, "g": 2 },
+                        "minGoalieGames": %d,
+                        "espnSync": { "leagueName": "Puck Luck", "leagueId": "42", "syncedAt": "2026-09-17T08:00:00Z" }
+                      }
+                    }
+                  }
+                }
+                """.formatted(games);
+    }
+
+    /**
+     * A draft's league is its own, so that setting one up never rewrites the projection it is played
+     * against — and a full NHL season is 84 games, so that is the highest goalie minimum there is.
+     */
+    @Test
+    void updateKeepsTheLeagueADraftHoldsOfItsOwn() throws Exception {
+        ArgumentCaptor<UpdateProjectionData> sent = ArgumentCaptor.forClass(UpdateProjectionData.class);
+        when(userProjectionService.update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), any(), eq(PlayerIdSpace.ESPN)))
+                .thenReturn(projection("My league"));
+
+        mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithDraftLeague(84)))
+                .andExpect(status().isOk());
+
+        verify(userProjectionService).update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), sent.capture(), eq(PlayerIdSpace.ESPN));
+        DraftSettings league = sent.getValue().draft().settings();
+        assertThat(league.scoringType()).isEqualTo(ScoringType.CATEGORY);
+        assertThat(league.leagueSize()).isEqualTo(10);
+        assertThat(league.minGoalieGames()).isEqualTo(84);
+        assertThat(league.espnSync().leagueId()).isEqualTo("42");
+    }
+
+    @Test
+    void updateRejectsAGoalieMinimumLongerThanASeason() throws Exception {
+        mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithDraftLeague(85)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

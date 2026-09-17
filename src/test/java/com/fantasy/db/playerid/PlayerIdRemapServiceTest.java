@@ -13,6 +13,7 @@ import com.fantasy.db.projection.Season;
 import com.fantasy.db.projection.UserProjection;
 import com.fantasy.db.projection.UserProjectionRepository;
 import com.fantasy.db.projection.dto.DraftPick;
+import com.fantasy.db.projection.dto.DraftSettings;
 import com.fantasy.db.projection.dto.DraftState;
 import com.fantasy.db.projection.dto.DraftTeam;
 import com.fantasy.db.projection.dto.PlayerProjection;
@@ -20,6 +21,7 @@ import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
+import com.fantasy.db.projection.dto.RosterSlots;
 import com.fantasy.db.share.ProjectionShare;
 import com.fantasy.db.share.ProjectionShareRepository;
 import com.fantasy.db.share.dto.SharedPlayer;
@@ -105,7 +107,7 @@ class PlayerIdRemapServiceTest {
             picks.add(new DraftPick(playerId, "team-1"));
         }
         return new DraftState(List.of(new DraftTeam("team-1", "Mine", true)),
-                List.of("team-1"), picks, null);
+                List.of("team-1"), picks, null, null);
     }
 
     private ProjectionShare storeShare(int playerId) {
@@ -158,6 +160,23 @@ class PlayerIdRemapServiceTest {
         ProjectionShare storedShare = shareRepository.findById(share.getId()).orElseThrow();
         assertThat(storedShare.getData().players().getFirst().playerId()).isEqualTo(ESPN_MCDAVID);
         assertThat(storedShare.getPlayerIdSpace()).isEqualTo(PlayerIdSpace.ESPN);
+    }
+
+    /** The league a draft holds has no player ids in it, and must come through a remap untouched. */
+    @Test
+    void keepsTheLeagueADraftHolds() {
+        DraftState picks = draftWith(YAHOO_MCDAVID);
+        DraftSettings league = new DraftSettings(ScoringType.CATEGORY, Map.of("goals", 4.5),
+                List.of("goals"), List.of("gp"), 10, new RosterSlots(2, 2, 2, 4, 1, 4, 2), 84,
+                null, null, null);
+        UserProjection projection = storeProjection(new DraftState(picks.teams(), picks.order(),
+                picks.picks(), null, league), YAHOO_MCDAVID);
+
+        remapService.remap(request(false, mcDavid()));
+
+        UserProjection stored = projectionRepository.findById(projection.getId()).orElseThrow();
+        assertThat(stored.getData().draft().settings()).isEqualTo(league);
+        assertThat(stored.getData().draft().picks().getFirst().playerId()).isEqualTo(ESPN_MCDAVID);
     }
 
     /**
