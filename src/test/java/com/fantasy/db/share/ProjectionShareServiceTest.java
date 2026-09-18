@@ -20,6 +20,7 @@ import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
+import com.fantasy.db.projection.dto.UpdateProjectionData;
 import com.fantasy.db.projection.dto.ManualRanking;
 import com.fantasy.db.projection.dto.PlayerTypeRanking;
 import com.fantasy.db.projection.dto.YahooSync;
@@ -181,8 +182,13 @@ class ProjectionShareServiceTest {
                 .containsExactly(7, 3);
     }
 
+    /**
+     * A link follows its projection. The owner's editor publishes again after every save, so a
+     * second share has to replace the board behind the token the first one handed out, not hand
+     * the old board back: that is what left every edit made after sharing off the page.
+     */
     @Test
-    void sharingAgainReturnsTheSameLinkUntouched() {
+    void sharingAgainKeepsTheLinkAndReplacesTheBoard() {
         UserProjection projection = projection();
         ProjectionShare first = projectionShareService.share(
                 userId, projection.getId(), sharedPlayers("Connor McDavid"));
@@ -192,9 +198,39 @@ class ProjectionShareServiceTest {
 
         assertThat(second.getId()).isEqualTo(first.getId());
         assertThat(second.getToken()).isEqualTo(first.getToken());
-        // A published snapshot is final: the second call hands back what was already published.
-        assertThat(second.getData().players().getFirst().name()).isEqualTo("Connor McDavid");
         assertThat(projectionShareRepository.count()).isEqualTo(1L);
+        assertThat(projectionShareRepository.findByToken(first.getToken()).orElseThrow()
+                .getData().players().getFirst().name()).isEqualTo("Nathan MacKinnon");
+    }
+
+    /**
+     * The settings and the name are read from the stored projection on every publish, not only
+     * the first: a league changed after sharing has to reach the page along with the rows it
+     * re-ranked.
+     */
+    @Test
+    void sharingAgainTakesTheProjectionsCurrentSettingsAndName() {
+        UserProjection projection = projection();
+        projectionShareService.share(userId, projection.getId(), sharedPlayers("Connor McDavid"));
+        ProjectionSettings stored = projection.getData().settings();
+        ProjectionSettings changed = new ProjectionSettings(
+                stored.scoringType(), Map.of("goals", 6.0), stored.activeScoringColumns(),
+                stored.activeUtilityColumns(), stored.scaleSettings(), stored.decimalSettings(),
+                stored.useDefaultDecimals(), 14, stored.rosterSlots(), stored.minGoalieGames(),
+                stored.yahooSync(), stored.espnSync(), stored.lastEspnLeagueId(),
+                stored.playerBasis(), stored.playerPoolSyncedAt(),
+                stored.unacknowledgedNewPlayerIds(), stored.manualRanking());
+        userProjectionService.update(userId, projection.getId(), "My league, retuned",
+                new UpdateProjectionData(changed, null, null, null));
+
+        ProjectionShare share = projectionShareService.share(
+                userId, projection.getId(), sharedPlayers("Connor McDavid"));
+
+        assertThat(share.getName()).isEqualTo("My league, retuned");
+        assertThat(share.getData().settings().leagueSize()).isEqualTo(14);
+        assertThat(share.getData().settings().statWeights()).containsEntry("goals", 6.0);
+        // Published again is published: the league details stay off the page the second time too.
+        assertThat(share.getData().settings().yahooSync()).isNull();
     }
 
     @Test

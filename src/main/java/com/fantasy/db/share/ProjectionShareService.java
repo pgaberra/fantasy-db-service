@@ -35,13 +35,15 @@ public class ProjectionShareService {
     }
 
     /**
-     * Publishes a projection, once. The rows come from the caller, which owns the ranking; the
-     * settings, name, season and position corrections are copied from the stored projection so a
-     * client cannot publish a page that misrepresents the projection it points at.
+     * Publishes a projection, or publishes it again. The rows come from the caller, which owns the
+     * ranking; the settings, name, season and position corrections are copied from the stored
+     * projection so a client cannot publish a page that misrepresents the projection it points at.
      *
-     * <p>A projection that is already shared keeps the share it has, untouched — there is no way
-     * to refresh or withdraw a published snapshot. Deleting the projection deletes the share with
-     * it (the row cascades), which is the only thing that takes a link down.
+     * <p>A projection that is already shared keeps its token and has the copy behind it replaced,
+     * so a link follows the projection rather than the moment it was first shared. The owner's
+     * editor publishes again after every save of a shared projection. Deleting the projection
+     * deletes the share with it (the row cascades), which is the only thing that takes a link
+     * down.
      */
     @Transactional
     public ProjectionShare share(UUID userId, UUID projectionId, List<SharedPlayer> players) {
@@ -60,6 +62,10 @@ public class ProjectionShareService {
                 projection.getData().positionOverrides());
 
         return projectionShareRepository.findByProjectionIdAndUserId(projectionId, userId)
+                .map(existing -> {
+                    existing.refresh(projection.getName(), data, projection.getPlayerIdSpace());
+                    return projectionShareRepository.save(existing);
+                })
                 .orElseGet(() -> projectionShareRepository.save(ProjectionShare.create(
                         projectionId, userId, projection.getName(), projection.getSeason(), data,
                         projection.getPlayerIdSpace())));
@@ -108,8 +114,8 @@ public class ProjectionShareService {
      * owner's league name and its id on Yahoo or ESPN — including the remembered ESPN id, which
      * outlives the sync — and that is about their private league rather
      * than the projection anyone with the link came to look at. The player basis and pool stamp go
-     * with them: a share is a frozen snapshot, so how its rows would be kept in step with the
-     * player pool no longer says anything. So do the new players the owner has not acknowledged:
+     * with them: they say how the owner's projection keeps its rows in step with the pool, which is
+     * nothing a reader of the published rows can act on. So do the new players the owner has not acknowledged:
      * that notice is theirs, and an import would otherwise hand it to someone else.
      *
      * <p>A hand ranking is kept, for the reason the author's position corrections are: the board

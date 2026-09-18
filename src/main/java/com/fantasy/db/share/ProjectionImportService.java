@@ -20,9 +20,9 @@ import java.util.UUID;
  * Copying a shared board into an account, so the holder of a link can draft against someone
  * else's numbers.
  *
- * <p>What is copied is the snapshot, not the projection behind it. The owner published a frozen
- * picture and consented to that much; every edit they have made since is theirs, and the copy
- * would be a different board than the one the link showed.
+ * <p>What is copied is the published board, not the projection behind it. The two agree once the
+ * owner's editor has published its last save, but not while a save is still on its way or when a
+ * publish failed, and the copy has to be the board the link showed.
  */
 @Service
 public class ProjectionImportService {
