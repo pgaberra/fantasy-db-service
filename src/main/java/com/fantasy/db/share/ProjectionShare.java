@@ -105,12 +105,19 @@ public class ProjectionShare {
      * Publishes the projection again under the link it already has. Name, rows and id space are
      * all replaced together, since they are one copy taken at one moment; the token and the
      * season are not, so every link already posted keeps working.
+     *
+     * <p>The stamp moves only when what a reader sees does. The editor publishes after every save,
+     * including saves that change nothing on the page (an acknowledged notice, a draft setting),
+     * and the page shows the stamp as when the author last changed their board.
      */
     public void refresh(String name, SharedProjectionData data, PlayerIdSpace playerIdSpace) {
+        boolean changed = !name.equals(this.name) || !data.equals(this.data);
         this.name = name;
         this.data = data;
         this.playerIdSpace = playerIdSpace.getCode();
-        this.updatedAt = Instant.now();
+        if (changed) {
+            this.updatedAt = Instant.now();
+        }
     }
 
     private static String generateToken() {
@@ -155,11 +162,13 @@ public class ProjectionShare {
      * Replaces the snapshot's rows and records which platform's ids they are now keyed by. These
      * rows are also what an import copies, so an id the player pool no longer knows would follow
      * the board into the importer's account if it were left behind.
+     *
+     * <p>Leaves the stamp alone: the page shows it as when the author last changed their board, and
+     * renumbering the same players is not that.
      */
     public void remapPlayerIds(SharedProjectionData remapped, PlayerIdSpace space) {
         this.data = remapped;
         this.playerIdSpace = space.getCode();
-        this.updatedAt = Instant.now();
     }
 
     public Instant getCreatedAt() {

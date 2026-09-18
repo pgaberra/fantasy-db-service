@@ -21,7 +21,9 @@ public record SharedProjectionResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Season season,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) SharedProjectionData data,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant createdAt,
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant updatedAt
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "When the published board last changed: the author's last saved edit "
+                        + "that altered what the page shows.") Instant updatedAt
 ) {
     public static SharedProjectionResponse from(SharedProjection shared) {
         ProjectionShare share = shared.share();
