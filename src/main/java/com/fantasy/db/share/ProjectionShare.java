@@ -16,11 +16,12 @@ import java.util.Base64;
 import java.util.UUID;
 
 /**
- * A public, read-only snapshot of one saved projection, reachable by an unguessable token.
+ * The public, read-only copy of one saved projection, reachable by an unguessable token.
  *
- * <p>The snapshot is deliberate: a link posted somewhere public keeps showing what was shared,
- * not whatever the owner edited afterwards. It is also final — a published snapshot cannot be
- * refreshed or withdrawn, and sharing the same projection again returns the link it already has.
+ * <p>A link follows its projection: sharing it again rewrites this row in place, under the same
+ * token, and the owner's editor does that after every save. It is still a stored copy rather than
+ * a view of the projection because the ranked rows can only be computed by the web, and the
+ * public read needs them to filter, sort and cut the board for a visitor who is not signed in.
  * Deleting the projection deletes the share with it.
  */
 @Entity
@@ -56,9 +57,8 @@ public class ProjectionShare {
     @Column(nullable = false)
     private SharedProjectionData data;
 
-    // Which platform's player ids the rows in `data` are keyed by. A share is
-    // otherwise frozen; this is the one thing that may still be rewritten, because an id that no
-    // longer resolves is not the picture that was shared either.
+    // Which platform's player ids the rows in `data` are keyed by: the projection's, as of the last
+    // publish, or whatever a remap has since translated them to.
     @Column(name = "player_id_space", nullable = false, length = 8)
     private String playerIdSpace = PlayerIdSpace.YAHOO.getCode();
 
@@ -101,6 +101,17 @@ public class ProjectionShare {
         return share;
     }
 
+    /**
+     * Publishes the projection again under the link it already has. Name, rows and id space are
+     * all replaced together, since they are one copy taken at one moment; the token and the
+     * season are not, so every link already posted keeps working.
+     */
+    public void refresh(String name, SharedProjectionData data, PlayerIdSpace playerIdSpace) {
+        this.name = name;
+        this.data = data;
+        this.playerIdSpace = playerIdSpace.getCode();
+        this.updatedAt = Instant.now();
+    }
 
     private static String generateToken() {
         byte[] bytes = new byte[TOKEN_BYTES];

@@ -12,10 +12,10 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * One row of a shared snapshot. Identity (name, team, positions) and the computed rank and value
- * are denormalised on purpose: a share is a frozen picture, and the public page must render from
- * this row alone without loading the full player read model or recomputing a ranking whose pool
- * it no longer has.
+ * One row of a shared board. Identity (name, team, positions) and the computed rank and value
+ * are denormalised on purpose: the ranking is computed by the owner's web client, and the public
+ * page must render from this row alone without loading the full player read model or recomputing
+ * a ranking the server has no copy of.
  */
 public record SharedPlayer(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int playerId,

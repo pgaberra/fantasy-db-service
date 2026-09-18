@@ -37,11 +37,12 @@ public class ProjectionShareController {
         return ShareResponse.from(projectionShareService.findByProjection(userId, projectionId));
     }
 
-    @Operation(summary = "Publish or refresh the projection's public snapshot",
-            description = "Idempotent: an already-shared projection keeps its token, so links already "
-                    + "posted elsewhere stay valid and start showing the refreshed snapshot.")
+    @Operation(summary = "Publish or refresh the projection's public board",
+            description = "An already-shared projection keeps its token and has its board replaced, "
+                    + "so links already posted elsewhere stay valid and show the projection as it "
+                    + "was last published.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Share created, or the existing one returned"),
+        @ApiResponse(responseCode = "200", description = "Share created, or the existing one refreshed"),
         @ApiResponse(responseCode = "400", description = "Validation failed (too many rows, oversized name)"),
         @ApiResponse(responseCode = "409", description = "The owner has not set a username yet"),
         @ApiResponse(responseCode = "404", description = "No such projection for this user")
