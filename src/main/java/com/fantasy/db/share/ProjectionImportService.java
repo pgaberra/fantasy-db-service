@@ -12,6 +12,9 @@ import com.fantasy.db.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -67,8 +70,25 @@ public class ProjectionImportService {
      */
     @Transactional
     public UserProjection importFrom(UUID userId, String token, String name) {
+        return importFrom(userId, token, name, null);
+    }
+
+    /**
+     * @param seenUpdatedAt the share's stamp as the reader last saw it, or null to copy the board
+     *     as it is now. A link follows its projection, so the author can change the board while
+     *     someone is reading it; copying the newer board would hand them numbers they never saw,
+     *     and only the latest board is kept, so refusing is the one honest answer. The page then
+     *     reloads the board and the reader can copy that.
+     */
+    @Transactional
+    public UserProjection importFrom(UUID userId, String token, String name, Instant seenUpdatedAt) {
         ProjectionShare share = projectionShareRepository.findByToken(token)
                 .orElseThrow(() -> new NoSuchElementException("No share found for that token"));
+        if (seenUpdatedAt != null && share.getUpdatedAt().truncatedTo(ChronoUnit.MICROS)
+                .isAfter(seenUpdatedAt.truncatedTo(ChronoUnit.MICROS))) {
+            throw new ConcurrentModificationException(
+                    "The board behind this link has changed since it was read");
+        }
         String authorUsername = userRepository.findById(share.getUserId())
                 .map(User::getUsername)
                 .orElseThrow(() -> new NoSuchElementException("No user found for that share"));

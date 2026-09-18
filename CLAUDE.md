@@ -240,6 +240,7 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
 - `exception/` — `ErrorDto`, `GlobalExceptionHandler`. The whole service uses **built-in**
   exceptions rather than custom ones (`NoSuchElementException` → 404,
   `IllegalArgumentException` → 400, `IllegalStateException` → 409,
+  `ConcurrentModificationException` → 412 for a stale read (a share copied after it changed),
   `DataIntegrityViolationException` → 409, `MethodArgumentNotValidException` → 400,
   `NoResourceFoundException` → 404 for a path this build does not serve).
 

@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.ConcurrentModificationException;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
@@ -63,7 +64,7 @@ class ProjectionImportControllerTest {
 
     @Test
     void importsASharedBoard() throws Exception {
-        when(projectionImportService.importFrom(eq(USER_ID), eq("s0mErAnd0mT0k3nV4lu3ab"), eq(null)))
+        when(projectionImportService.importFrom(eq(USER_ID), eq("s0mErAnd0mT0k3nV4lu3ab"), eq(null), eq(null)))
                 .thenReturn(imported());
 
         mockMvc.perform(post(IMPORT_PATH).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
@@ -82,10 +83,32 @@ class ProjectionImportControllerTest {
 
     @Test
     void reportsAnUnknownTokenAsNotFound() throws Exception {
-        when(projectionImportService.importFrom(eq(USER_ID), eq("s0mErAnd0mT0k3nV4lu3ab"), eq(null)))
+        when(projectionImportService.importFrom(eq(USER_ID), eq("s0mErAnd0mT0k3nV4lu3ab"), eq(null), eq(null)))
                 .thenThrow(new NoSuchElementException("No share found for that token"));
 
         mockMvc.perform(post(IMPORT_PATH).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void passesOnTheStampTheReaderSaw() throws Exception {
+        when(projectionImportService.importFrom(eq(USER_ID), eq("s0mErAnd0mT0k3nV4lu3ab"), eq(null),
+                eq(Instant.parse("2026-09-18T08:00:00.123456Z"))))
+                .thenReturn(imported());
+
+        mockMvc.perform(post(IMPORT_PATH).contentType(MediaType.APPLICATION_JSON).content(
+                        "{ \"token\": \"s0mErAnd0mT0k3nV4lu3ab\", "
+                                + "\"seenUpdatedAt\": \"2026-09-18T08:00:00.123456Z\" }"))
+                .andExpect(status().isCreated());
+    }
+
+    /** A stale read is its own status, so the BFF and the page can tell it from a taken name. */
+    @Test
+    void reportsABoardChangedSinceItWasReadAsPreconditionFailed() throws Exception {
+        when(projectionImportService.importFrom(eq(USER_ID), eq("s0mErAnd0mT0k3nV4lu3ab"), eq(null), eq(null)))
+                .thenThrow(new ConcurrentModificationException("changed"));
+
+        mockMvc.perform(post(IMPORT_PATH).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                .andExpect(status().isPreconditionFailed());
     }
 }

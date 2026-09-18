@@ -8,6 +8,7 @@ import com.fantasy.db.projection.ScoringType;
 import com.fantasy.db.projection.SkaterPosition;
 import com.fantasy.db.projection.Season;
 import com.fantasy.db.projection.UserProjection;
+import com.fantasy.db.projection.UserProjectionRepository;
 import com.fantasy.db.projection.UserProjectionService;
 import com.fantasy.db.projection.dto.EspnSync;
 import com.fantasy.db.projection.dto.PlayerProjection;
@@ -19,6 +20,7 @@ import com.fantasy.db.projection.dto.YahooSync;
 import com.fantasy.db.share.dto.SharedPlayer;
 import com.fantasy.db.user.User;
 import com.fantasy.db.user.UserRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +31,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.ConcurrentModificationException;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
@@ -50,6 +53,15 @@ class ProjectionImportServiceTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private ProjectionShareRepository projectionShareRepository;
+
+    @Autowired
+    private UserProjectionRepository userProjectionRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private UUID readerId;
     private int authorCount;
@@ -126,6 +138,40 @@ class ProjectionImportServiceTest {
         UserProjection projection = userProjectionService.create(
                 authorId, name, ProjectionKind.PROJECTION, null, data, PlayerIdSpace.YAHOO);
         return projectionShareService.share(authorId, projection.getId(), publishedRows()).getToken();
+    }
+
+    /**
+     * The reader copies the board they read. The stamp goes out on the share page and comes back
+     * with the press, so it has to survive the round trip through storage digit for digit.
+     */
+    @Test
+    void copiesWhenTheBoardIsStillTheOneTheReaderSaw() {
+        String token = share("My league");
+        // Out to storage and back, the way the page's copy of the stamp was read.
+        entityManager.flush();
+        entityManager.clear();
+        Instant seen = projectionShareRepository.findByToken(token).orElseThrow().getUpdatedAt();
+
+        UserProjection imported = projectionImportService.importFrom(readerId, token, null, seen);
+
+        assertThat(imported.getData().players()).hasSize(3);
+    }
+
+    /**
+     * A link follows its projection, so the author can change the board while someone reads it.
+     * Only the latest board is kept, so the copy is refused rather than made of numbers the
+     * reader never saw, and nothing lands in their account.
+     */
+    @Test
+    void refusesToCopyABoardThatChangedSinceTheReaderSawIt() {
+        String token = share("My league");
+        Instant seen = projectionShareRepository.findByToken(token).orElseThrow().getUpdatedAt()
+                .minusSeconds(60);
+        long before = userProjectionRepository.count();
+
+        assertThatThrownBy(() -> projectionImportService.importFrom(readerId, token, null, seen))
+                .isInstanceOf(ConcurrentModificationException.class);
+        assertThat(userProjectionRepository.count()).isEqualTo(before);
     }
 
     @Test

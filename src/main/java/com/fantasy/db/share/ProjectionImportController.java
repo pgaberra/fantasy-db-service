@@ -30,8 +30,8 @@ public class ProjectionImportController {
     }
 
     @Operation(summary = "Copy a shared projection into the user's own, by its share token",
-            description = "Anyone holding the token may copy it. The copy is of the snapshot as it "
-                    + "was published, carries no draft, and is stamped with who shared it. "
+            description = "Anyone holding the token may copy it. The copy is of the board as it was "
+                    + "last published, carries no draft, and is stamped with who shared it. "
                     + "Copying the same board again is allowed: with no `name` given, a taken "
                     + "name is resolved to \"<name> (2)\" rather than refused.")
     @ApiResponses({
@@ -39,7 +39,9 @@ public class ProjectionImportController {
         @ApiResponse(responseCode = "400", description = "Validation failed (blank or oversized token/name)"),
         @ApiResponse(responseCode = "404", description = "No share with that token"),
         @ApiResponse(responseCode = "409", description = "The `name` given is already taken by "
-                + "another projection. Omit it and the server picks a free one.")
+                + "another projection. Omit it and the server picks a free one."),
+        @ApiResponse(responseCode = "412", description = "`seenUpdatedAt` was sent and the board "
+                + "has changed since. Nothing was copied; read the share again and retry.")
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -47,6 +49,7 @@ public class ProjectionImportController {
             @PathVariable UUID userId,
             @Valid @RequestBody ImportProjectionRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ProjectionResponse.from(
-                projectionImportService.importFrom(userId, request.token(), request.name())));
+                projectionImportService.importFrom(
+                        userId, request.token(), request.name(), request.seenUpdatedAt())));
     }
 }
