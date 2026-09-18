@@ -16,6 +16,7 @@ import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
+import com.fantasy.db.projection.dto.UpdateProjectionData;
 import com.fantasy.db.projection.dto.YahooSync;
 import com.fantasy.db.share.dto.SharedPlayer;
 import com.fantasy.db.user.User;
@@ -206,6 +207,48 @@ class ProjectionImportServiceTest {
         assertThat(first.type()).isEqualTo(PlayerType.SKATER);
         assertThat(first.stats().scoring()).containsEntry("goals", 64.0);
         assertThat(first.stats().utility()).containsEntry("gp", 82.0);
+    }
+
+    /**
+     * A copy is the reader's own board from the moment it is made. A link follows its projection,
+     * and the author's editor publishes after every save, so nothing the author does afterwards
+     * may reach the copy: not new numbers, not a new league, not a rename, and not deleting their
+     * projection, which takes the share down with it.
+     */
+    @Test
+    void nothingTheAuthorDoesAfterwardsReachesTheCopy() {
+        User author = userRepository.save(User.create("later@example.com", "hash"));
+        author.updateUsername("later");
+        UUID authorId = userRepository.save(author).getId();
+        UserProjection original = userProjectionService.create(
+                authorId, "My league", ProjectionKind.PROJECTION, null, projectionData(), PlayerIdSpace.YAHOO);
+        String token = projectionShareService.share(authorId, original.getId(), publishedRows()).getToken();
+        UUID copyId = projectionImportService.importFrom(readerId, token, null).getId();
+
+        ProjectionSettings stored = original.getData().settings();
+        ProjectionSettings retuned = new ProjectionSettings(
+                stored.scoringType(), Map.of("goals", 9.0), stored.activeScoringColumns(),
+                stored.activeUtilityColumns(), stored.scaleSettings(), stored.decimalSettings(),
+                stored.useDefaultDecimals(), 16, stored.rosterSlots(), stored.minGoalieGames(),
+                stored.yahooSync(), stored.espnSync(), stored.lastEspnLeagueId(),
+                stored.playerBasis(), stored.playerPoolSyncedAt(),
+                stored.unacknowledgedNewPlayerIds(), stored.manualRanking());
+        userProjectionService.update(authorId, original.getId(), "Renamed by the author",
+                new UpdateProjectionData(retuned, null, null, null));
+        projectionShareService.share(authorId, original.getId(), List.of(new SharedPlayer(
+                1, "Connor McDavid", "EDM", null, List.of("C"), PlayerType.SKATER, 1, 999.0,
+                new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 99.0)))));
+        userProjectionService.delete(authorId, original.getId());
+        entityManager.flush();
+        entityManager.clear();
+
+        UserProjection copy = userProjectionRepository.findById(copyId).orElseThrow();
+        assertThat(copy.getName()).isEqualTo("My league");
+        assertThat(copy.getData().settings().statWeights()).containsEntry("goals", 4.5);
+        assertThat(copy.getData().settings().leagueSize()).isEqualTo(12);
+        assertThat(copy.getData().players()).extracting(PlayerProjection::playerId)
+                .containsExactly(1, 2, 3);
+        assertThat(copy.getData().players().getFirst().stats().scoring()).containsEntry("goals", 64.0);
     }
 
     @Test
