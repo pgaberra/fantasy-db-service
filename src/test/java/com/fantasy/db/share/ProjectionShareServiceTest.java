@@ -233,6 +233,51 @@ class ProjectionShareServiceTest {
         assertThat(share.getData().settings().yahooSync()).isNull();
     }
 
+    /**
+     * The page shows this stamp as when the author last changed their board. The editor publishes
+     * after every save, and most saves leave the board as it was, so an unchanged publish must not
+     * move it.
+     */
+    @Test
+    void anUnchangedPublishLeavesTheUpdatedStampAlone() {
+        UserProjection projection = projection();
+        Instant first = projectionShareService.share(
+                userId, projection.getId(), sharedPlayers("Connor McDavid")).getUpdatedAt();
+
+        Instant again = projectionShareService.share(
+                userId, projection.getId(), sharedPlayers("Connor McDavid")).getUpdatedAt();
+
+        assertThat(again).isEqualTo(first);
+    }
+
+    @Test
+    void aChangedBoardMovesTheUpdatedStamp() throws InterruptedException {
+        UserProjection projection = projection();
+        Instant first = projectionShareService.share(
+                userId, projection.getId(), sharedPlayers("Connor McDavid")).getUpdatedAt();
+        // Instant.now() ticks per millisecond on Windows, so two calls in a row can tie.
+        Thread.sleep(5);
+
+        Instant changed = projectionShareService.share(
+                userId, projection.getId(), sharedPlayers("Nathan MacKinnon")).getUpdatedAt();
+
+        assertThat(changed).isAfter(first);
+    }
+
+    /** Renumbering the same players for another platform is not the author changing the board. */
+    @Test
+    void aRemapLeavesTheUpdatedStampAlone() {
+        UserProjection projection = projection();
+        ProjectionShare share = projectionShareService.share(
+                userId, projection.getId(), sharedPlayers("Connor McDavid"));
+        Instant before = share.getUpdatedAt();
+
+        share.remapPlayerIds(share.getData(), PlayerIdSpace.ESPN);
+
+        assertThat(share.getUpdatedAt()).isEqualTo(before);
+        assertThat(share.getPlayerIdSpace()).isEqualTo(PlayerIdSpace.ESPN);
+    }
+
     @Test
     void refusesToShareAProjectionThatIsNotTheCallersOwn() {
         UserProjection projection = projection();
