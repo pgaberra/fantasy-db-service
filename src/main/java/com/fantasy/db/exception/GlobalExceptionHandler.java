@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.util.ConcurrentModificationException;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
@@ -46,6 +47,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorDto> handleIllegalState(IllegalStateException e) {
         return build(HttpStatus.CONFLICT, e.getMessage());
+    }
+
+    /**
+     * What the caller read has changed since: a board copied from a share link that its author
+     * edited while the reader was looking at it. 412 rather than 409, so the caller can tell a
+     * stale read, which a reload fixes, from a clash like a taken name.
+     */
+    @ExceptionHandler(ConcurrentModificationException.class)
+    public ResponseEntity<ErrorDto> handleStaleRead(ConcurrentModificationException e) {
+        return build(HttpStatus.PRECONDITION_FAILED, e.getMessage());
     }
 
     /**

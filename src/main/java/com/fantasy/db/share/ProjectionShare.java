@@ -12,6 +12,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.UUID;
 
@@ -94,7 +95,7 @@ public class ProjectionShare {
     public static ProjectionShare create(UUID projectionId, UUID userId, String name,
                                          Season season, SharedProjectionData data,
                                          PlayerIdSpace playerIdSpace) {
-        Instant now = Instant.now();
+        Instant now = stampNow();
         ProjectionShare share = new ProjectionShare(UUID.randomUUID(), projectionId, userId,
                 generateToken(), name, season, data, now, now);
         share.playerIdSpace = playerIdSpace.getCode();
@@ -116,8 +117,17 @@ public class ProjectionShare {
         this.data = data;
         this.playerIdSpace = playerIdSpace.getCode();
         if (changed) {
-            this.updatedAt = Instant.now();
+            this.updatedAt = stampNow();
         }
+    }
+
+    /**
+     * To the microsecond, which is all TIMESTAMPTZ keeps. A reader sends this stamp back to copy
+     * the board it saw, and a stamp held in memory with more digits than the stored one would not
+     * match what a later read returns.
+     */
+    private static Instant stampNow() {
+        return Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
     private static String generateToken() {
