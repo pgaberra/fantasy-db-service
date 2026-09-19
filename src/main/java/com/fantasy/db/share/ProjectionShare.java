@@ -2,6 +2,10 @@ package com.fantasy.db.share;
 
 import com.fantasy.db.projection.PlayerIdSpace;
 import com.fantasy.db.projection.Season;
+import com.fantasy.db.projection.dto.DraftState;
+import com.fantasy.db.projection.dto.PlayerProjection;
+import com.fantasy.db.projection.dto.ProjectionData;
+import com.fantasy.db.share.dto.SharedPlayer;
 import com.fantasy.db.share.dto.SharedProjectionData;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,6 +18,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -23,7 +28,8 @@ import java.util.UUID;
  * token, and the owner's editor does that after every save. It is still a stored copy rather than
  * a view of the projection because the ranked rows can only be computed by the web, and the
  * public read needs them to filter, sort and cut the board for a visitor who is not signed in.
- * Deleting the projection deletes the share with it.
+ * Deleting the projection deletes the share with it, and every follow of the link with that (the
+ * foreign key from {@code user_projections.origin_share_token} cascades, V25).
  */
 @Entity
 @Table(name = "projection_shares")
@@ -110,15 +116,39 @@ public class ProjectionShare {
      * <p>The stamp moves only when what a reader sees does. The editor publishes after every save,
      * including saves that change nothing on the page (an acknowledged notice, a draft setting),
      * and the page shows the stamp as when the author last changed their board.
+     *
+     * @return whether the board a follower mirrors changed, so they have to follow it
      */
-    public void refresh(String name, SharedProjectionData data, PlayerIdSpace playerIdSpace) {
+    public boolean refresh(String name, SharedProjectionData data, PlayerIdSpace playerIdSpace) {
         boolean changed = !name.equals(this.name) || !data.equals(this.data);
+        boolean renumbered = !playerIdSpace.getCode().equals(this.playerIdSpace);
         this.name = name;
         this.data = data;
         this.playerIdSpace = playerIdSpace.getCode();
         if (changed) {
             this.updatedAt = stampNow();
         }
+        return changed || renumbered;
+    }
+
+    /**
+     * The board as a projection stores it, with the given draft on top: what a follow of this link
+     * holds and what a copy of it starts from. A published row carries the identity and rank the
+     * public page needs on top of the player's id, type and stats; the account reading it has a
+     * player pool of its own to draw names from, and a ranking of its own to compute.
+     *
+     * <p>The author's position corrections come with it, since the ranking was computed against
+     * those positions. The author's draft never does: the picks were theirs.
+     */
+    public ProjectionData boardWith(DraftState draft) {
+        List<PlayerProjection> players = data.players().stream()
+                .map(ProjectionShare::toPlayerProjection)
+                .toList();
+        return new ProjectionData(data.settings(), players, draft, data.positionOverrides());
+    }
+
+    private static PlayerProjection toPlayerProjection(SharedPlayer player) {
+        return new PlayerProjection(player.playerId(), player.type(), player.stats());
     }
 
     /**

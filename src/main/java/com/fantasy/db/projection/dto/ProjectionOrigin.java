@@ -5,15 +5,17 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import com.fantasy.db.projection.UserProjection;
 
 /**
- * Who a projection was copied from, on the copies that were imported from a share link. Absent on
- * a projection the user made themselves.
+ * The link a projection follows, and who published it. Present exactly on a follow: the board is
+ * the author's, mirrored in whenever they publish, and the only thing its owner may change on it
+ * is the draft. Absent on a projection the user made themselves and on a copy they took of
+ * someone's board, both of which are theirs to edit.
  */
 public record ProjectionOrigin(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "The share the board was copied from. Still set once that share is gone, so a stale token here is expected.")
+                description = "The share this board follows. Never stale: the follow goes away with the share (V25).")
         String shareToken,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "The author's public name as it read at import time. Snapshotted with the rows, unlike the live name on the public page.")
+                description = "The author's public name as it read when the link was first followed. Snapshotted, unlike the live name on the public page.")
         String authorUsername
 ) {
     public static ProjectionOrigin from(UserProjection projection) {

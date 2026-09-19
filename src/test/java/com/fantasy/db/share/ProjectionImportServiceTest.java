@@ -10,6 +10,9 @@ import com.fantasy.db.projection.Season;
 import com.fantasy.db.projection.UserProjection;
 import com.fantasy.db.projection.UserProjectionRepository;
 import com.fantasy.db.projection.UserProjectionService;
+import com.fantasy.db.projection.dto.DraftPick;
+import com.fantasy.db.projection.dto.DraftState;
+import com.fantasy.db.projection.dto.DraftTeam;
 import com.fantasy.db.projection.dto.EspnSync;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
@@ -27,7 +30,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Instant;
 import java.util.List;
@@ -105,7 +107,7 @@ class ProjectionImportServiceTest {
                 overrides);
     }
 
-    /** What a share publishes: the whole ranking, which is also what an import copies. */
+    /** What a share publishes: the whole ranking, which is also what a follow holds. */
     private static List<SharedPlayer> publishedRows() {
         return List.of(
                 new SharedPlayer(
@@ -122,47 +124,397 @@ class ProjectionImportServiceTest {
                         new PlayerStats(Map.of("gp", 60.0), Map.of("wins", 38.0))));
     }
 
-    /**
-     * A fresh author per share: a user may keep only one projection of their own, and a projection
-     * may be shared only once, so two links mean two accounts — which is what importing two
-     * boards means anyway.
-     */
-    private String share(String name) {
-        return share(name, projectionData());
+    /** An author with one shared projection. A projection may be shared only once. */
+    private record Author(UUID id, UUID projectionId, String token) {}
+
+    private Author author(String name) {
+        return author(name, projectionData());
     }
 
-    private String share(String name, ProjectionData data) {
+    private Author author(String name, ProjectionData data) {
         String handle = "alex" + authorCount++;
         User author = userRepository.save(User.create(handle + "@example.com", "hash"));
         author.updateUsername(handle);
         UUID authorId = userRepository.save(author).getId();
         UserProjection projection = userProjectionService.create(
                 authorId, name, ProjectionKind.PROJECTION, null, data, PlayerIdSpace.YAHOO);
-        return projectionShareService.share(authorId, projection.getId(), publishedRows()).getToken();
+        String token = projectionShareService
+                .share(authorId, projection.getId(), publishedRows()).getToken();
+        return new Author(authorId, projection.getId(), token);
+    }
+
+    private String share(String name) {
+        return author(name).token();
+    }
+
+    private UserProjection follow(String token) {
+        return projectionImportService.follow(readerId, token, null).projection();
+    }
+
+    private UserProjection reload(UUID id) {
+        entityManager.flush();
+        entityManager.clear();
+        return userProjectionRepository.findById(id).orElseThrow();
+    }
+
+    @Test
+    void followsTheBoardTheShareWasPublishedWith() {
+        String token = share("My league");
+
+        UserProjection follow = follow(token);
+
+        assertThat(follow.getUserId()).isEqualTo(readerId);
+        assertThat(follow.getKind()).isEqualTo(ProjectionKind.IMPORTED);
+        assertThat(follow.isFollow()).isTrue();
+        assertThat(follow.getName()).isEqualTo("My league");
+        assertThat(follow.getSeason()).isEqualTo(Season.SEASON_2026_2027);
+        assertThat(follow.getData().players()).hasSize(3);
+        assertThat(follow.getData().settings().statWeights()).containsEntry("goals", 4.5);
     }
 
     /**
-     * The reader copies the board they read. The stamp goes out on the share page and comes back
-     * with the press, so it has to survive the round trip through storage digit for digit.
+     * The rows come from the snapshot rather than from the author's projection, and arrive
+     * stripped back to what a projection stores: the identity and rank a published row carries
+     * belong to the page that renders it, not to the board in the follower's account.
      */
     @Test
-    void copiesWhenTheBoardIsStillTheOneTheReaderSaw() {
+    void holdsTheSnapshotsRowsStrippedBackToWhatAProjectionStores() {
+        UserProjection follow = follow(share("My league"));
+
+        assertThat(follow.getData().players())
+                .extracting(PlayerProjection::playerId)
+                .containsExactly(1, 2, 3);
+        PlayerProjection first = follow.getData().players().getFirst();
+        assertThat(first.type()).isEqualTo(PlayerType.SKATER);
+        assertThat(first.stats().scoring()).containsEntry("goals", 64.0);
+        assertThat(first.stats().utility()).containsEntry("gp", 82.0);
+    }
+
+    /**
+     * The stamp goes out on the share page and comes back with the press, so it has to survive the
+     * round trip through storage digit for digit.
+     */
+    @Test
+    void followsWhenTheBoardIsStillTheOneTheReaderSaw() {
         String token = share("My league");
-        // Out to storage and back, the way the page's copy of the stamp was read.
         entityManager.flush();
         entityManager.clear();
         Instant seen = projectionShareRepository.findByToken(token).orElseThrow().getUpdatedAt();
 
-        UserProjection imported = projectionImportService.importFrom(readerId, token, null, seen);
+        UserProjection follow = projectionImportService.follow(readerId, token, seen).projection();
 
-        assertThat(imported.getData().players()).hasSize(3);
+        assertThat(follow.getData().players()).hasSize(3);
     }
 
     /**
      * A link follows its projection, so the author can change the board while someone reads it.
-     * Only the latest board is kept, so the copy is refused rather than made of numbers the
-     * reader never saw, and nothing lands in their account.
+     * The reader is told rather than quietly handed numbers they never saw, and nothing lands in
+     * their account.
      */
+    @Test
+    void refusesToFollowABoardThatChangedSinceTheReaderSawIt() {
+        String token = share("My league");
+        Instant seen = projectionShareRepository.findByToken(token).orElseThrow().getUpdatedAt()
+                .minusSeconds(60);
+        long before = userProjectionRepository.count();
+
+        assertThatThrownBy(() -> projectionImportService.follow(readerId, token, seen))
+                .isInstanceOf(ConcurrentModificationException.class);
+        assertThat(userProjectionRepository.count()).isEqualTo(before);
+    }
+
+    @Test
+    void inheritsTheSharesPlayerIdSpaceRatherThanTheDefault() {
+        assertThat(follow(share("My league")).getPlayerIdSpace()).isEqualTo(PlayerIdSpace.YAHOO);
+    }
+
+    @Test
+    void stampsWhoTheBoardCameFrom() {
+        String token = share("My league");
+
+        UserProjection follow = follow(token);
+
+        assertThat(follow.getOriginShareToken()).isEqualTo(token);
+        assertThat(follow.getOriginAuthorUsername()).isEqualTo("alex0");
+    }
+
+    @Test
+    void carriesNoneOfTheAuthorsLeagueDetails() {
+        UserProjection follow = follow(share("My league"));
+
+        assertThat(follow.getData().settings().yahooSync()).isNull();
+        assertThat(follow.getData().settings().espnSync()).isNull();
+        assertThat(follow.getData().settings().lastEspnLeagueId()).isNull();
+    }
+
+    /**
+     * The corrections are part of the board: the ranking on the page was computed against those
+     * positions, so a follow that put players back on the read model's would rank differently
+     * from what the reader clicked on.
+     */
+    @Test
+    void inheritsThePositionsTheAuthorCorrected() {
+        UserProjection follow = follow(share("My league"));
+
+        assertThat(follow.getData().positionOverrides()).containsExactly(
+                new PositionOverride(2, List.of(SkaterPosition.LW, SkaterPosition.RW)));
+    }
+
+    /** Links published before shares carried the corrections still work, with none of them. */
+    @Test
+    void followsAShareThatCarriesNoCorrections() {
+        UserProjection follow = follow(share("Older board", projectionData(null)));
+
+        assertThat(follow.getData().positionOverrides()).isNull();
+    }
+
+    private String share(String name, ProjectionData data) {
+        return author(name, data).token();
+    }
+
+    @Test
+    void startsWithNoDraftSoTheAuthorsPicksAreNotInherited() {
+        assertThat(follow(share("My league")).getData().draft()).isNull();
+    }
+
+    /**
+     * The button on a link is "follow", and pressing it twice is the same link. A second row
+     * mirroring the same board would be a copy of it under the same author-given name, with
+     * nothing in the list to tell the two apart.
+     */
+    @Test
+    void followingTheSameLinkAgainReturnsTheFollowAlreadyHeld() {
+        String token = share("My league");
+        ProjectionImportService.Follow first = projectionImportService.follow(readerId, token, null);
+
+        ProjectionImportService.Follow again = projectionImportService.follow(readerId, token, null);
+
+        assertThat(first.created()).isTrue();
+        assertThat(again.created()).isFalse();
+        assertThat(again.projection().getId()).isEqualTo(first.projection().getId());
+        assertThat(userProjectionRepository.count()).isEqualTo(authorCount + 1);
+    }
+
+    /** Your own board is already in your account; a follow of it would mirror it into itself. */
+    @Test
+    void refusesToFollowYourOwnLink() {
+        Author author = author("My league");
+
+        assertThatThrownBy(() -> projectionImportService.follow(author.id(), author.token(), null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void holdsAFollowOfMoreThanOneLinkAtATime() {
+        follow(share("First league"));
+        follow(share("Second league"));
+
+        assertThat(userProjectionService.findAll(readerId)).hasSize(2);
+    }
+
+    /**
+     * A follow is named by its author, so it sits outside the names the follower has chosen: the
+     * follower cannot rename it, and holding it to their namespace would number a stranger's
+     * board after theirs and then have the author's next rename fail.
+     */
+    @Test
+    void takesTheSharesNameEvenWhenTheUserHoldsIt() {
+        userProjectionService.create(readerId, "My league", ProjectionKind.PROJECTION, null,
+                projectionData(), PlayerIdSpace.YAHOO);
+
+        UserProjection follow = follow(share("My league"));
+
+        assertThat(follow.getName()).isEqualTo("My league");
+        assertThat(userProjectionService.findAll(readerId)).hasSize(2);
+    }
+
+    @Test
+    void leavesTheFollowersOwnProjectionAlone() {
+        UserProjection own = userProjectionService.create(
+                readerId, "Mine", ProjectionKind.PROJECTION, null, projectionData(), PlayerIdSpace.YAHOO);
+
+        follow(share("My league"));
+
+        assertThat(userProjectionService.findById(readerId, own.getId()).getKind())
+                .isEqualTo(ProjectionKind.PROJECTION);
+    }
+
+    @Test
+    void refusesATokenThatIsNotAShare() {
+        assertThatThrownBy(() -> projectionImportService.follow(readerId, "n0tAT0k3n", null))
+                .isInstanceOf(NoSuchElementException.class);
+    }
+
+    /**
+     * The whole point of a follow: the author's next publish is what the follower sees. The
+     * author's editor publishes after every save, so this is what a save of theirs does.
+     */
+    @Test
+    void mirrorsTheAuthorsNextPublishIntoTheFollow() {
+        Author author = author("My league");
+        UUID followId = follow(author.token()).getId();
+
+        republish(author, "Renamed by the author", 9.0, 16);
+
+        UserProjection follow = reload(followId);
+        assertThat(follow.getName()).isEqualTo("Renamed by the author");
+        assertThat(follow.getData().settings().statWeights()).containsEntry("goals", 9.0);
+        assertThat(follow.getData().settings().leagueSize()).isEqualTo(16);
+        assertThat(follow.getData().players().getFirst().stats().scoring())
+                .containsEntry("goals", 99.0);
+    }
+
+    /** The board is the author's; the picks made against it are the follower's. */
+    @Test
+    void keepsTheFollowersOwnDraftWhenTheAuthorPublishes() {
+        Author author = author("My league");
+        UUID followId = follow(author.token()).getId();
+        DraftState draft = new DraftState(
+                List.of(new DraftTeam("t1", "Mine", true)), List.of("t1"),
+                List.of(new DraftPick(1, "t1")), null, null);
+        userProjectionService.update(readerId, followId, "My league",
+                new UpdateProjectionData(projectionData().settings(), null, draft, null));
+
+        republish(author, "My league", 9.0, 12);
+
+        UserProjection follow = reload(followId);
+        assertThat(follow.getData().draft()).isEqualTo(draft);
+        assertThat(follow.getData().players().getFirst().stats().scoring())
+                .containsEntry("goals", 99.0);
+    }
+
+    /**
+     * The editor publishes after every save, including saves that change nothing anyone else can
+     * see. A follow is not touched by those: its stamp is what orders the follower's list.
+     */
+    @Test
+    void leavesTheFollowAloneWhenAPublishChangesNothing() {
+        Author author = author("My league");
+        UUID followId = follow(author.token()).getId();
+        Instant stamped = reload(followId).getUpdatedAt();
+
+        projectionShareService.share(author.id(), author.projectionId(), publishedRows());
+
+        assertThat(reload(followId).getUpdatedAt()).isEqualTo(stamped);
+    }
+
+    /** Publishing again reaches every account following the link, not just the first. */
+    @Test
+    void mirrorsIntoEveryFollowOfTheLink() {
+        Author author = author("My league");
+        UUID mine = follow(author.token()).getId();
+        UUID theirs = userRepository.save(User.create("second@example.com", "hash")).getId();
+        UUID other = projectionImportService.follow(theirs, author.token(), null).projection().getId();
+
+        republish(author, "Renamed by the author", 9.0, 12);
+
+        assertThat(reload(mine).getName()).isEqualTo("Renamed by the author");
+        assertThat(reload(other).getName()).isEqualTo("Renamed by the author");
+    }
+
+    private void republish(Author author, String name, double goalWeight, int leagueSize) {
+        ProjectionSettings stored = projectionData().settings();
+        ProjectionSettings retuned = new ProjectionSettings(
+                stored.scoringType(), Map.of("goals", goalWeight), stored.activeScoringColumns(),
+                stored.activeUtilityColumns(), stored.scaleSettings(), stored.decimalSettings(),
+                stored.useDefaultDecimals(), leagueSize, stored.rosterSlots(), stored.minGoalieGames(),
+                stored.yahooSync(), stored.espnSync(), stored.lastEspnLeagueId(),
+                stored.playerBasis(), stored.playerPoolSyncedAt(),
+                stored.unacknowledgedNewPlayerIds(), stored.manualRanking());
+        userProjectionService.update(author.id(), author.projectionId(), name,
+                new UpdateProjectionData(retuned, null, null, null));
+        projectionShareService.share(author.id(), author.projectionId(), List.of(new SharedPlayer(
+                1, "Connor McDavid", "EDM", null, List.of("C"), PlayerType.SKATER, 1, 999.0,
+                new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 99.0)))));
+    }
+
+    @Test
+    void copiesTheBoardUnderAServerChosenName() {
+        String token = share("My league");
+
+        UserProjection copy = projectionImportService.copy(readerId, token, null);
+
+        assertThat(copy.getName()).isEqualTo("Copy of My league");
+        assertThat(copy.getKind()).isEqualTo(ProjectionKind.PROJECTION);
+        assertThat(copy.getData().players()).extracting(PlayerProjection::playerId)
+                .containsExactly(1, 2, 3);
+        assertThat(copy.getData().positionOverrides()).containsExactly(
+                new PositionOverride(2, List.of(SkaterPosition.LW, SkaterPosition.RW)));
+        assertThat(copy.getData().draft()).isNull();
+        assertThat(copy.getSeason()).isEqualTo(Season.SEASON_2026_2027);
+        assertThat(copy.getPlayerIdSpace()).isEqualTo(PlayerIdSpace.YAHOO);
+    }
+
+    /** A copy is the reader's own board: no link back, and nothing mirrors into it. */
+    @Test
+    void theCopyFollowsNothing() {
+        Author author = author("My league");
+        UUID copyId = projectionImportService.copy(readerId, author.token(), null).getId();
+
+        republish(author, "Renamed by the author", 9.0, 16);
+
+        UserProjection copy = reload(copyId);
+        assertThat(copy.getOriginShareToken()).isNull();
+        assertThat(copy.isFollow()).isFalse();
+        assertThat(copy.getName()).isEqualTo("Copy of My league");
+        assertThat(copy.getData().settings().statWeights()).containsEntry("goals", 4.5);
+    }
+
+    /** A reader who copies a board has said it is one they want, so they keep the link too. */
+    @Test
+    void copyingALinkAlsoStartsFollowingIt() {
+        String token = share("My league");
+
+        projectionImportService.copy(readerId, token, null);
+
+        assertThat(userProjectionRepository.findByUserIdAndOriginShareToken(readerId, token))
+                .isPresent();
+        assertThat(userProjectionService.findAll(readerId)).hasSize(2);
+    }
+
+    @Test
+    void copyingALinkAlreadyFollowedAddsNoSecondFollow() {
+        String token = share("My league");
+        follow(token);
+
+        projectionImportService.copy(readerId, token, null);
+
+        assertThat(userProjectionService.findAll(readerId)).hasSize(2);
+    }
+
+    /** Nobody follows their own board, but they may take a second copy of it. */
+    @Test
+    void copiesYourOwnLinkWithoutFollowingIt() {
+        Author author = author("My league");
+
+        UserProjection copy = projectionImportService.copy(author.id(), author.token(), null);
+
+        assertThat(copy.getName()).isEqualTo("Copy of My league");
+        assertThat(userProjectionRepository.findByUserIdAndOriginShareToken(
+                author.id(), author.token())).isEmpty();
+    }
+
+    /** The name is the server's suggestion, so a clash is numbered rather than refused. */
+    @Test
+    void numbersACopyWhoseNameTheUserAlreadyHolds() {
+        String token = share("My league");
+        projectionImportService.copy(readerId, token, null);
+
+        UserProjection second = projectionImportService.copy(readerId, token, null);
+
+        assertThat(second.getName()).isEqualTo("Copy of My league (2)");
+    }
+
+    /** "Copy of " in front of a name at the cap makes one no column would hold. */
+    @Test
+    void trimsACopyOfANameAtTheCap() {
+        String token = share("x".repeat(100));
+
+        UserProjection copy = projectionImportService.copy(readerId, token, null);
+
+        assertThat(copy.getName()).hasSize(100).startsWith("Copy of xxx");
+    }
+
     @Test
     void refusesToCopyABoardThatChangedSinceTheReaderSawIt() {
         String token = share("My league");
@@ -170,277 +522,14 @@ class ProjectionImportServiceTest {
                 .minusSeconds(60);
         long before = userProjectionRepository.count();
 
-        assertThatThrownBy(() -> projectionImportService.importFrom(readerId, token, null, seen))
+        assertThatThrownBy(() -> projectionImportService.copy(readerId, token, seen))
                 .isInstanceOf(ConcurrentModificationException.class);
         assertThat(userProjectionRepository.count()).isEqualTo(before);
     }
 
     @Test
-    void copiesTheBoardTheShareWasPublishedWith() {
-        String token = share("My league");
-
-        UserProjection imported = projectionImportService.importFrom(readerId, token, null);
-
-        assertThat(imported.getUserId()).isEqualTo(readerId);
-        assertThat(imported.getKind()).isEqualTo(ProjectionKind.IMPORTED);
-        assertThat(imported.getName()).isEqualTo("My league");
-        assertThat(imported.getSeason()).isEqualTo(Season.SEASON_2026_2027);
-        assertThat(imported.getData().players()).hasSize(3);
-        assertThat(imported.getData().settings().statWeights()).containsEntry("goals", 4.5);
-    }
-
-    /**
-     * The rows come from the snapshot rather than from the author's projection, which has moved on
-     * since — and they arrive stripped back to what a projection stores, since the identity and
-     * rank a published row carries belong to the page that renders it, not to the importer's copy.
-     */
-    @Test
-    void copiesTheSnapshotRatherThanTheAuthorsProjectionAsItStandsNow() {
-        String token = share("My league");
-
-        UserProjection imported = projectionImportService.importFrom(readerId, token, null);
-
-        assertThat(imported.getData().players())
-                .extracting(PlayerProjection::playerId)
-                .containsExactly(1, 2, 3);
-        PlayerProjection first = imported.getData().players().getFirst();
-        assertThat(first.type()).isEqualTo(PlayerType.SKATER);
-        assertThat(first.stats().scoring()).containsEntry("goals", 64.0);
-        assertThat(first.stats().utility()).containsEntry("gp", 82.0);
-    }
-
-    /**
-     * A copy is the reader's own board from the moment it is made. A link follows its projection,
-     * and the author's editor publishes after every save, so nothing the author does afterwards
-     * may reach the copy: not new numbers, not a new league, not a rename, and not deleting their
-     * projection, which takes the share down with it.
-     */
-    @Test
-    void nothingTheAuthorDoesAfterwardsReachesTheCopy() {
-        User author = userRepository.save(User.create("later@example.com", "hash"));
-        author.updateUsername("later");
-        UUID authorId = userRepository.save(author).getId();
-        UserProjection original = userProjectionService.create(
-                authorId, "My league", ProjectionKind.PROJECTION, null, projectionData(), PlayerIdSpace.YAHOO);
-        String token = projectionShareService.share(authorId, original.getId(), publishedRows()).getToken();
-        UUID copyId = projectionImportService.importFrom(readerId, token, null).getId();
-
-        ProjectionSettings stored = original.getData().settings();
-        ProjectionSettings retuned = new ProjectionSettings(
-                stored.scoringType(), Map.of("goals", 9.0), stored.activeScoringColumns(),
-                stored.activeUtilityColumns(), stored.scaleSettings(), stored.decimalSettings(),
-                stored.useDefaultDecimals(), 16, stored.rosterSlots(), stored.minGoalieGames(),
-                stored.yahooSync(), stored.espnSync(), stored.lastEspnLeagueId(),
-                stored.playerBasis(), stored.playerPoolSyncedAt(),
-                stored.unacknowledgedNewPlayerIds(), stored.manualRanking());
-        userProjectionService.update(authorId, original.getId(), "Renamed by the author",
-                new UpdateProjectionData(retuned, null, null, null));
-        projectionShareService.share(authorId, original.getId(), List.of(new SharedPlayer(
-                1, "Connor McDavid", "EDM", null, List.of("C"), PlayerType.SKATER, 1, 999.0,
-                new PlayerStats(Map.of("gp", 82.0), Map.of("goals", 99.0)))));
-        userProjectionService.delete(authorId, original.getId());
-        entityManager.flush();
-        entityManager.clear();
-
-        UserProjection copy = userProjectionRepository.findById(copyId).orElseThrow();
-        assertThat(copy.getName()).isEqualTo("My league");
-        assertThat(copy.getData().settings().statWeights()).containsEntry("goals", 4.5);
-        assertThat(copy.getData().settings().leagueSize()).isEqualTo(12);
-        assertThat(copy.getData().players()).extracting(PlayerProjection::playerId)
-                .containsExactly(1, 2, 3);
-        assertThat(copy.getData().players().getFirst().stats().scoring()).containsEntry("goals", 64.0);
-    }
-
-    @Test
-    void inheritsTheSharesPlayerIdSpaceRatherThanTheDefault() {
-        String token = share("My league");
-
-        UserProjection imported = projectionImportService.importFrom(readerId, token, null);
-
-        assertThat(imported.getPlayerIdSpace()).isEqualTo(PlayerIdSpace.YAHOO);
-    }
-
-    @Test
-    void stampsWhoTheBoardCameFrom() {
-        String token = share("My league");
-
-        UserProjection imported = projectionImportService.importFrom(readerId, token, null);
-
-        assertThat(imported.getOriginShareToken()).isEqualTo(token);
-        assertThat(imported.getOriginAuthorUsername()).isEqualTo("alex0");
-    }
-
-    @Test
-    void carriesNoneOfTheAuthorsLeagueDetails() {
-        String token = share("My league");
-
-        UserProjection imported = projectionImportService.importFrom(readerId, token, null);
-
-        assertThat(imported.getData().settings().yahooSync()).isNull();
-        assertThat(imported.getData().settings().espnSync()).isNull();
-        assertThat(imported.getData().settings().lastEspnLeagueId()).isNull();
-    }
-
-    /**
-     * The corrections are part of the board: the ranking on the page was computed against those
-     * positions, so a copy that put players back on the read model's would rank differently from
-     * what the importer clicked on.
-     */
-    @Test
-    void inheritsThePositionsTheAuthorCorrected() {
-        String token = share("My league");
-
-        UserProjection imported = projectionImportService.importFrom(readerId, token, null);
-
-        assertThat(imported.getData().positionOverrides()).containsExactly(
-                new PositionOverride(2, List.of(SkaterPosition.LW, SkaterPosition.RW)));
-    }
-
-    /** Links published before shares carried the corrections still import, with none of them. */
-    @Test
-    void importsAShareThatCarriesNoCorrections() {
-        String token = share("Older board", projectionData(null));
-
-        UserProjection imported = projectionImportService.importFrom(readerId, token, null);
-
-        assertThat(imported.getData().positionOverrides()).isNull();
-    }
-
-    @Test
-    void startsWithNoDraftSoTheAuthorsPicksAreNotInherited() {
-        String token = share("My league");
-
-        UserProjection imported = projectionImportService.importFrom(readerId, token, null);
-
-        assertThat(imported.getData().draft()).isNull();
-    }
-
-    @Test
-    void takesTheNameTheImporterChose() {
-        String token = share("My league");
-
-        UserProjection imported = projectionImportService.importFrom(readerId, token, "  Their board  ");
-
-        assertThat(imported.getName()).isEqualTo("Their board");
-    }
-
-    @Test
-    void holdsMoreThanOneImportedBoardAtATime() {
-        String first = share("First league");
-        String second = share("Second league");
-
-        projectionImportService.importFrom(readerId, first, null);
-        projectionImportService.importFrom(readerId, second, null);
-
-        assertThat(userProjectionService.findAll(readerId)).hasSize(2);
-    }
-
-    @Test
-    void leavesTheImportersOwnProjectionAlone() {
-        UserProjection own = userProjectionService.create(
-                readerId, "Mine", ProjectionKind.PROJECTION, null, projectionData(), PlayerIdSpace.YAHOO);
-
-        projectionImportService.importFrom(readerId, share("My league"), null);
-
-        assertThat(userProjectionService.findById(readerId, own.getId()).getKind())
-                .isEqualTo(ProjectionKind.PROJECTION);
-        assertThat(userProjectionService.findAll(readerId)).hasSize(2);
-    }
-
-    @Test
-    void refusesASecondImportUnderTheSameName() {
-        String first = share("Same name");
-        String second = share("Other league");
-        projectionImportService.importFrom(readerId, first, "Same name");
-
-        assertThatThrownBy(() -> projectionImportService.importFrom(readerId, second, "Same name"))
-                .isInstanceOf(DataIntegrityViolationException.class);
-    }
-
-    /**
-     * The bug the naming rule was written for: a copy landed in the same list as the importer's
-     * own boards under a name one of them already had, and the two were told apart only by the
-     * smaller line beneath them. Still true, and still fixed — but by numbering the copy rather
-     * than by refusing it, since nobody chose the name that clashed.
-     */
-    @Test
-    void numbersAnImportThatWouldTakeTheNameOfTheImportersOwnProjection() {
-        userProjectionService.create(readerId, "My Projection 3", ProjectionKind.PROJECTION, null,
-                projectionData(), PlayerIdSpace.YAHOO);
-        String token = share("My Projection 3");
-
-        UserProjection copy = projectionImportService.importFrom(readerId, token, null);
-
-        assertThat(copy.getName()).isEqualTo("My Projection 3 (2)");
-        assertThat(copy.getKind()).isEqualTo(ProjectionKind.IMPORTED);
-        assertThat(userProjectionService.findAll(readerId)).hasSize(2);
-    }
-
-    /**
-     * Opening the same link a third time is the case that made this worth changing: someone who
-     * has copied a board twice already gets a third copy, not an error telling them to go and
-     * sort the naming out themselves.
-     */
-    @Test
-    void keepsNumberingForEveryFurtherCopyOfTheSameBoard() {
-        String token = share("My league");
-
-        projectionImportService.importFrom(readerId, token, null);
-        projectionImportService.importFrom(readerId, token, null);
-        UserProjection third = projectionImportService.importFrom(readerId, token, null);
-
-        assertThat(third.getName()).isEqualTo("My league (3)");
-        assertThat(userProjectionService.findAll(readerId))
-                .extracting(UserProjection::getName)
-                .containsExactlyInAnyOrder("My league", "My league (2)", "My league (3)");
-    }
-
-    /**
-     * The suffix has to fit inside the hundred characters a name gets, so a name already at the
-     * cap loses its tail rather than the copy being rejected by the column. Same shape as V19,
-     * which had to break the ties already in the table.
-     */
-    @Test
-    void trimsANameAtTheCapToMakeRoomForTheNumber() {
-        String longName = "x".repeat(100);
-        String token = share(longName);
-        projectionImportService.importFrom(readerId, token, null);
-
-        UserProjection second = projectionImportService.importFrom(readerId, token, null);
-
-        assertThat(second.getName()).hasSize(100).endsWith(" (2)");
-    }
-
-    /**
-     * A name the caller typed is theirs to change, so a clash on that one is still reported.
-     * Only the name nobody chose is settled quietly.
-     */
-    @Test
-    void stillRefusesANameTheCallerChoseThatIsAlreadyTaken() {
-        userProjectionService.create(readerId, "Taken", ProjectionKind.PROJECTION, null,
-                projectionData(), PlayerIdSpace.YAHOO);
-        String token = share("My league");
-
-        assertThatThrownBy(() -> projectionImportService.importFrom(readerId, token, "Taken"))
-                .isInstanceOf(DataIntegrityViolationException.class);
-    }
-
-    /** Naming the copy yourself still works, and still wins over the numbering. */
-    @Test
-    void acceptsThatImportUnderAFreeName() {
-        userProjectionService.create(readerId, "My Projection 3", ProjectionKind.PROJECTION, null,
-                projectionData(), PlayerIdSpace.YAHOO);
-        String token = share("My Projection 3");
-
-        UserProjection copy = projectionImportService.importFrom(readerId, token, "Erik's board");
-
-        assertThat(copy.getName()).isEqualTo("Erik's board");
-        assertThat(copy.getKind()).isEqualTo(ProjectionKind.IMPORTED);
-    }
-
-    @Test
-    void refusesATokenThatIsNotAShare() {
-        assertThatThrownBy(() -> projectionImportService.importFrom(readerId, "n0tAT0k3n", null))
+    void refusesToCopyATokenThatIsNotAShare() {
+        assertThatThrownBy(() -> projectionImportService.copy(readerId, "n0tAT0k3n", null))
                 .isInstanceOf(NoSuchElementException.class);
     }
 }

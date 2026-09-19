@@ -63,12 +63,32 @@ public class ProjectionShareService {
 
         return projectionShareRepository.findByProjectionIdAndUserId(projectionId, userId)
                 .map(existing -> {
-                    existing.refresh(projection.getName(), data, projection.getPlayerIdSpace());
+                    if (existing.refresh(projection.getName(), data, projection.getPlayerIdSpace())) {
+                        mirrorIntoFollows(existing);
+                    }
                     return projectionShareRepository.save(existing);
                 })
+                // A brand new token can have no followers yet, so there is nothing to mirror into.
                 .orElseGet(() -> projectionShareRepository.save(ProjectionShare.create(
                         projectionId, userId, projection.getName(), projection.getSeason(), data,
                         projection.getPlayerIdSpace())));
+    }
+
+    /**
+     * Carries the board that was just published into everyone following the link, in the same
+     * transaction as the publish: a follow is the author's board in the follower's account, so
+     * the two may not be seen to disagree. Each follower keeps their own draft, and their rows
+     * are locked while this runs, so a pick being saved at the same moment cannot put the
+     * previous board back.
+     *
+     * <p>Only when the board actually changed. The owner's editor publishes after every save,
+     * including saves that change nothing anyone else can see.
+     */
+    private void mirrorIntoFollows(ProjectionShare share) {
+        for (UserProjection follow
+                : userProjectionRepository.findAllByOriginShareTokenForUpdate(share.getToken())) {
+            follow.mirror(share.getName(), share.boardWith(null), share.getPlayerIdSpace());
+        }
     }
 
     @Transactional(readOnly = true)
