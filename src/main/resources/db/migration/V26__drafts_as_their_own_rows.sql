@@ -17,6 +17,20 @@ ALTER TABLE user_projections ADD COLUMN source_projection_id UUID;
 -- is renamed by a league sync; a name somebody chose is the more deliberate of the two and stands.
 ALTER TABLE user_projections ADD COLUMN auto_named BOOLEAN NOT NULL DEFAULT TRUE;
 
+-- The old namespace goes first, before a single row moves.
+--
+-- V19's index (narrowed by V25) covers every kind but PRESET_DRAFT, so the moment a preset draft
+-- becomes a DRAFT, or a draft is split out under the name of the board it was played against,
+-- those rows fall inside it and collide with the board itself. Dropping it first is what makes
+-- the rewrite below possible at all; the new namespaces are created once the rows are in place.
+-- This is what failed on the staging deploy (23505 on uk_user_projections_user_name) when the
+-- indexes were left until the end.
+DROP INDEX uk_user_projections_user_name;
+
+-- One draft per preset is gone with the model that forced it: drafting against last season's
+-- numbers a second time is a reasonable thing to want, and was the whole complaint.
+DROP INDEX uk_user_projections_user_preset_draft;
+
 -- A preset draft is simply a draft that was started from a preset, which `preset` already says.
 UPDATE user_projections SET kind = 'DRAFT' WHERE kind = 'PRESET_DRAFT';
 
@@ -75,15 +89,11 @@ BEGIN
     END LOOP;
 END $$;
 
--- One draft per preset is gone with the model that forced it: drafting against last season's
--- numbers a second time is a reasonable thing to want, and was the whole complaint.
-DROP INDEX uk_user_projections_user_preset_draft;
-
--- The two namespaces, said as two partial indexes. V19's excluded preset drafts from the boards'
--- namespace and V25 narrowed it again to leave out the follows, which their authors name; this
--- excludes every draft from it, and gives the drafts a namespace of their own.
-DROP INDEX uk_user_projections_user_name;
-
+-- The two namespaces, said as two partial indexes, now that every row is where it belongs. V19's
+-- excluded preset drafts from the boards' namespace and V25 narrowed it again to leave out the
+-- follows, which their authors name; this excludes every draft from it, and gives the drafts a
+-- namespace of their own. Apart, because a draft is named after the board it was started from, so
+-- one namespace would number every draft the moment it was created.
 CREATE UNIQUE INDEX uk_user_projections_user_name
     ON user_projections (user_id, name)
     WHERE kind <> 'DRAFT' AND origin_share_token IS NULL;
