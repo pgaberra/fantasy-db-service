@@ -13,8 +13,9 @@ public record CreateProjectionRequest(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @NotBlank @Size(max = 100) String name,
         @Schema(description = "What the projection is for. Defaults to the user's own.")
         ProjectionKind kind,
-        @Schema(description = "Which preset a preset draft was started from. A user may hold one "
-                + "draft per preset. Ignored on any other kind.")
+        @Schema(description = "Which preset a draft was started from. Ignored on any other kind, "
+                + "and left unset on a draft started from one of the user's own boards — that "
+                + "one is created through POST /projections/{id}/drafts instead.")
         ProjectionPreset preset,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @NotNull @Valid ProjectionData data,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED,

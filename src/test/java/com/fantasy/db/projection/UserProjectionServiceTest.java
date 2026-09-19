@@ -185,7 +185,7 @@ class UserProjectionServiceTest {
      */
     @Test
     void letsAPresetDraftKeepItsNameBesideAProjectionUsingIt() {
-        userProjectionService.create(userId, "AI Projection", ProjectionKind.PRESET_DRAFT,
+        userProjectionService.create(userId, "AI Projection", ProjectionKind.DRAFT,
                 ProjectionPreset.MODEL, sampleData(), PlayerIdSpace.YAHOO);
 
         UserProjection own = create("AI Projection");
@@ -203,7 +203,7 @@ class UserProjectionServiceTest {
         create("Last Season's Stats");
 
         UserProjection preset = userProjectionService.create(
-                userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT, null, sampleData(), PlayerIdSpace.YAHOO);
+                userId, "Last Season's Stats", ProjectionKind.DRAFT, null, sampleData(), PlayerIdSpace.YAHOO);
 
         assertThat(preset.getName()).isEqualTo("Last Season's Stats");
         assertThat(userProjectionService.findAll(userId)).hasSize(2);
@@ -234,42 +234,37 @@ class UserProjectionServiceTest {
         assertThat(userProjectionService.findAll(userId)).hasSize(2);
     }
 
+    /**
+     * The limit this feature removed. A draft used to be a field on the board it was drafted
+     * against, so a second one had nowhere to go; a preset draft was the same thing said with a
+     * unique index. Drafting the same starting point twice is an ordinary thing to want - the
+     * second draft is a second row, and the name is what tells them apart.
+     */
     @Test
-    void rejectsASecondDraftAgainstTheSamePreset() {
-        userProjectionService.create(userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT,
+    void allowsASecondDraftAgainstTheSamePreset() {
+        userProjectionService.create(userId, "Last Season's Stats", ProjectionKind.DRAFT,
                 ProjectionPreset.LAST_SEASON, sampleData(), PlayerIdSpace.YAHOO);
 
-        assertThatThrownBy(() -> userProjectionService.create(
-                userId, "Last Season's Stats again", ProjectionKind.PRESET_DRAFT,
-                ProjectionPreset.LAST_SEASON, sampleData(), PlayerIdSpace.YAHOO))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        UserProjection second = userProjectionService.create(
+                userId, "Last Season's Stats", ProjectionKind.DRAFT,
+                ProjectionPreset.LAST_SEASON, sampleData(), PlayerIdSpace.YAHOO);
+
+        assertThat(second.getName()).isEqualTo("Last Season's Stats (2)");
+        assertThat(userProjectionService.findAll(userId)).hasSize(2);
     }
 
     // The presets are separate starting points. Drafting against one is no reason to be barred
     // from the other, which is what the rule said while a preset draft was a single thing.
     @Test
     void allowsOneDraftAgainstEachPreset() {
-        userProjectionService.create(userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT,
+        userProjectionService.create(userId, "Last Season's Stats", ProjectionKind.DRAFT,
                 ProjectionPreset.LAST_SEASON, sampleData(), PlayerIdSpace.YAHOO);
 
         UserProjection model = userProjectionService.create(userId, "AI Projection",
-                ProjectionKind.PRESET_DRAFT, ProjectionPreset.MODEL, sampleData(), PlayerIdSpace.YAHOO);
+                ProjectionKind.DRAFT, ProjectionPreset.MODEL, sampleData(), PlayerIdSpace.YAHOO);
 
         assertThat(model.getPreset()).isEqualTo(ProjectionPreset.MODEL);
         assertThat(userProjectionService.findAll(userId)).hasSize(2);
-    }
-
-    // Drafts stored before the column existed carry no preset. Two of those are still one thing
-    // too many — the migration gives every one of them a preset, so this is the belt to that brace.
-    @Test
-    void rejectsASecondPresetDraftWithNoPresetRecorded() {
-        userProjectionService.create(userId, "Last Season's Stats", ProjectionKind.PRESET_DRAFT,
-                null, sampleData(), PlayerIdSpace.YAHOO);
-
-        assertThatThrownBy(() -> userProjectionService.create(
-                userId, "Another preset", ProjectionKind.PRESET_DRAFT, null, sampleData(),
-                PlayerIdSpace.YAHOO))
-                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -425,5 +420,152 @@ class UserProjectionServiceTest {
                 userId, "On ESPN ids", ProjectionKind.PROJECTION, null, sampleData(), PlayerIdSpace.ESPN);
 
         assertThat(espn.getPlayerIdSpace()).isEqualTo(PlayerIdSpace.ESPN);
+    }
+    /**
+     * A draft is a copy of the board it was started against, so the board can be edited - or
+     * deleted - without moving the numbers a draft is being picked from.
+     */
+    @Test
+    void startsADraftAsACopyOfTheBoard() {
+        UserProjection board = create("My league");
+
+        UserProjection draft = userProjectionService.startDraft(
+                userId, board.getId(), null, setupOnly());
+
+        assertThat(draft.getKind()).isEqualTo(ProjectionKind.DRAFT);
+        assertThat(draft.getName()).isEqualTo("My league");
+        assertThat(draft.getSourceProjectionId()).isEqualTo(board.getId());
+        assertThat(draft.getData().players()).isEqualTo(board.getData().players());
+        assertThat(draft.isAutoNamed()).isTrue();
+    }
+
+    /** The whole of the complaint: one board, as many drafts as the user wants. */
+    @Test
+    void startsAsManyDraftsAgainstOneBoardAsAsked() {
+        UserProjection board = create("My league");
+
+        userProjectionService.startDraft(userId, board.getId(), null, setupOnly());
+        UserProjection second = userProjectionService.startDraft(userId, board.getId(), null, setupOnly());
+        UserProjection third = userProjectionService.startDraft(userId, board.getId(), null, setupOnly());
+
+        assertThat(second.getName()).isEqualTo("My league (2)");
+        assertThat(third.getName()).isEqualTo("My league (3)");
+        assertThat(userProjectionService.findAll(userId)).hasSize(4);
+    }
+
+    /**
+     * The two namespaces. A draft is named after the board it was started from, so it has to be
+     * able to hold that name while the board still does - otherwise every first draft would be
+     * created as "(2)".
+     */
+    @Test
+    void letsADraftKeepTheNameOfTheBoardItWasStartedFrom() {
+        UserProjection board = create("My league");
+
+        UserProjection draft = userProjectionService.startDraft(
+                userId, board.getId(), null, setupOnly());
+
+        assertThat(draft.getName()).isEqualTo(board.getName());
+    }
+
+    @Test
+    void refusesToDraftAgainstADraft() {
+        UserProjection board = create("My league");
+        UserProjection draft = userProjectionService.startDraft(userId, board.getId(), null, setupOnly());
+
+        assertThatThrownBy(() -> userProjectionService.startDraft(
+                userId, draft.getId(), null, setupOnly()))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /** Someone else's board is not there to be drafted against, and says so as a 404. */
+    @Test
+    void refusesToStartADraftAgainstAnotherUsersBoard() {
+        UserProjection board = userProjectionService.create(UUID.randomUUID(), "Theirs",
+                ProjectionKind.PROJECTION, null, sampleData(), PlayerIdSpace.YAHOO);
+
+        assertThatThrownBy(() -> userProjectionService.startDraft(
+                userId, board.getId(), null, setupOnly()))
+                .isInstanceOf(NoSuchElementException.class);
+    }
+
+    /** Deleting a board leaves a draft against it standing, holding its own copy of the numbers. */
+    @Test
+    void keepsADraftWhenTheBoardItCameFromIsDeleted() {
+        UserProjection board = create("My league");
+        UserProjection draft = userProjectionService.startDraft(userId, board.getId(), null, setupOnly());
+
+        userProjectionService.delete(userId, board.getId());
+
+        UserProjection kept = userProjectionService.findById(userId, draft.getId());
+        assertThat(kept.getSourceProjectionId()).isNull();
+        assertThat(kept.getData().players()).hasSize(1);
+    }
+
+    @Test
+    void renameSetsTheNameAndMarksItTheUsersOwn() {
+        UserProjection draft = draft("My league");
+
+        UserProjection renamed = userProjectionService.rename(userId, draft.getId(), "Mock #3", false);
+
+        assertThat(renamed.getName()).isEqualTo("Mock #3");
+        assertThat(renamed.isAutoNamed()).isFalse();
+    }
+
+    /** A name the user typed is the whole of what was asked for, so a clash is reported. */
+    @Test
+    void renameRefusesANameAnotherDraftHolds() {
+        draft("Taken");
+        UserProjection other = draft("Mine");
+
+        assertThatThrownBy(() -> userProjectionService.rename(userId, other.getId(), "Taken", false))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    /** A draft and a board may hold the same name: they are listed apart and named after it. */
+    @Test
+    void renameLetsADraftTakeTheNameOfABoard() {
+        create("My league");
+        UserProjection draft = draft("Something else");
+
+        UserProjection renamed = userProjectionService.rename(userId, draft.getId(), "My league", false);
+
+        assertThat(renamed.getName()).isEqualTo("My league");
+    }
+
+    /** What a league sync does: the draft takes the league's name, numbered where it is taken. */
+    @Test
+    void derivedRenameNumbersANameAnotherDraftHolds() {
+        draft("Beer League");
+        UserProjection synced = draft("My league");
+
+        UserProjection renamed = userProjectionService.renameDerived(userId, synced.getId(), "Beer League");
+
+        assertThat(renamed.getName()).isEqualTo("Beer League (2)");
+        assertThat(renamed.isAutoNamed()).isTrue();
+    }
+
+    /**
+     * A name its owner typed stands: a sync that overwrote it would destroy the more deliberate
+     * of the two names.
+     */
+    @Test
+    void derivedRenameLeavesANameTheUserTypedAlone() {
+        UserProjection draft = draft("My league");
+        userProjectionService.rename(userId, draft.getId(), "Mock #3", false);
+
+        UserProjection unchanged = userProjectionService.renameDerived(userId, draft.getId(), "Beer League");
+
+        assertThat(unchanged.getName()).isEqualTo("Mock #3");
+    }
+
+    private UserProjection draft(String name) {
+        return userProjectionService.create(
+                userId, name, ProjectionKind.DRAFT, null, sampleData(), PlayerIdSpace.YAHOO);
+    }
+
+    /** What the draft page sends: its own settings and setup, with the rows left to the server. */
+    private static ProjectionData setupOnly() {
+        return new ProjectionData(sampleData().settings(), List.of(), null, null);
     }
 }

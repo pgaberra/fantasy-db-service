@@ -18,6 +18,14 @@ public record ProjectionResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant updatedAt,
         @Schema(description = "Who the board was copied from, on an imported projection. Absent on the user's own.")
         ProjectionOrigin origin,
+        @Schema(description = "The board a draft was started from. Absent on anything that is not "
+                + "a draft, on a draft started from a preset, and once that board is deleted — "
+                + "the draft holds its own copy of the numbers and outlives it.")
+        String sourceProjectionId,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Whether the name is still the one the server gave this row. False "
+                        + "once its owner has named it, which a derived rename then leaves alone.")
+        boolean autoNamed,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
                 description = "Which platform's numbering the player ids in data are. A caller "
                         + "serving another platform's pool must not merge that pool into these rows.")
@@ -33,6 +41,9 @@ public record ProjectionResponse(
                 projection.getCreatedAt(),
                 projection.getUpdatedAt(),
                 ProjectionOrigin.from(projection),
+                projection.getSourceProjectionId() == null
+                        ? null : projection.getSourceProjectionId().toString(),
+                projection.isAutoNamed(),
                 projection.getPlayerIdSpace());
     }
 }

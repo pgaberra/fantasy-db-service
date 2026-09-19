@@ -85,37 +85,50 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
     `SetAvatarRequest`, `AvatarResponse`, `UserResponse`, `ExistsResponse`
 - `projection/` — feature package (saved player projections, scoped to a user):
   - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `kind`, `preset`, `season`,
-    `data`, `player_id_space`, `origin_share_token`, `origin_author_username`, `created_at`,
-    `updated_at`; unique `(user_id, name)` over everything but a preset draft, and unique
-    `(user_id, preset)` over preset drafts, see `V19`). `data` is the **modelled,
-    validated** `ProjectionData` (settings + per-player stats) stored in a **`jsonb`**
-    column (`@JdbcTypeCode(SqlTypes.JSON)`). `season` is stamped from the
+    `data`, `player_id_space`, `source_projection_id`, `auto_named`, `origin_share_token`,
+    `origin_author_username`, `created_at`, `updated_at`; unique `(user_id, name)` over the
+    boards and, separately, over the drafts — two partial indexes, see `V19` and `V25`). `data`
+    is the **modelled, validated** `ProjectionData` (settings + per-player stats) stored in a
+    **`jsonb`** column (`@JdbcTypeCode(SqlTypes.JSON)`). `season` is stamped from the
     `projections.current-season` config (the caller never sends it — not in
     `CreateProjectionRequest`); stored as the 8-digit code, exposed as the `Season` enum.
     `player_id_space` is the opposite: the caller **must** state it on create (`@NotNull`,
     no default), because only they know which platform's pool filled the rows, and a wrong
     value is silent until a remap translates ids that were never in the space it assumed.
-    `kind` (`ProjectionKind`) separates the projection a user makes and edits
-    (`PROJECTION`) from the one that only exists to hold a draft started from a preset
-    such as last season's stats (`PRESET_DRAFT`), and from a board copied out of someone
-    else's share link (`IMPORTED`) — and only `PROJECTION` is their own work to list. Callers
-    that show "my projections" filter on it; the service stores whichever kind the request asks
-    for (defaulting to `PROJECTION`). Only `PRESET_DRAFT` is limited (`isUniquePerUser()`): **one
-    per preset** (`ProjectionPreset`: `last_season` or `model`), and a second for the same preset
-    is a 409. A user's own projections are unlimited, now that one can be started from a copy of
-    another and kept beside it. `IMPORTED` never was limited: drafting against two friends'
-    boards is a normal thing to want, and so is copying the **same** board twice. The name is
-    what has to stay distinct, and **create settles a clash rather than refusing it**:
-    `UserProjectionService.create` asks `freeNameFrom` for a name, which is the one the caller
-    sent or `"… (2)"`, `"… (3)"` and so on — the same shape `V19` used to break the ties
-    already in the table, and truncated the same way so the suffix fits the hundred characters
-    a name gets. So the saved name is **the one in the response**, not necessarily the one that
-    was sent, and a caller that shows it has to read it back. `ProjectionImportService` does the
-    same for a board imported with no `name` (a name the **importer** typed is still refused —
-    that one they can see and change). A **rename** is refused with a 409 too: there the name is
-    the whole of what was asked for, and the page that asked can say so. Create used to 409 on a
-    taken name, which threw away work a user had already done over something they could rename
-    afterwards.
+    `kind` (`ProjectionKind`) separates the projection a user makes and edits (`PROJECTION`)
+    from a board copied out of someone else's share link (`IMPORTED`) and from a **draft**
+    (`DRAFT`) — and only `PROJECTION` is their own work to list.
+    A **draft is a row of its own**, holding a copy of the numbers it was drafted against
+    together with its picks. It used to be a field on the board instead (`data.draft`), which
+    made "one draft per board" a property of the storage rather than a decision anyone took;
+    `V25` split the drafts out, and **nothing here is limited in number any more** — ten mocks
+    off one projection are ten rows, and drafting the same preset twice is allowed. Where a
+    draft came from is recorded by `preset` (`ProjectionPreset`: `last_season` or `model`) or by
+    `source_projection_id`, and the copy is what lets the board be edited, or deleted, while a
+    draft against it is under way (`delete` nulls the pointer; there is no FK, so tests and
+    production behave alike). `POST /{id}/drafts` (`startDraft`) is what copies a board into a
+    draft — the ~0.5 MB of player rows never leave the server. Callers that show "my
+    projections" filter on `kind`; the service stores whichever kind the request asks for
+    (defaulting to `PROJECTION`).
+    The name is what has to stay distinct, within **two namespaces**: the user's boards
+    (`PROJECTION` + `IMPORTED`, listed together and read by name) and their drafts. Apart,
+    because a draft is named after the board it was started from, so one namespace would
+    number every draft on the day it was created.
+    **Create settles a clash rather than refusing it**: `UserProjectionService.create` asks
+    `freeNameFrom` for a name, which is the one the caller sent or `"… (2)"`, `"… (3)"` and so
+    on — the same shape `V19` and `V25` used to break the ties already in the table, and
+    truncated the same way so the suffix fits the hundred characters a name gets. So the saved
+    name is **the one in the response**, not necessarily the one that was sent, and a caller
+    that shows it has to read it back. `ProjectionImportService` does the same for a board
+    imported with no `name` (a name the **importer** typed is still refused — that one they can
+    see and change), and `startDraft` for every draft. A **rename** (`PUT /{id}/name`) is
+    refused with a 409: there the name is the whole of what was asked for, and the page that
+    asked can say so. Create used to 409 on a taken name, which threw away work a user had
+    already done over something they could rename afterwards.
+    `auto_named` says whether the name is still the server's. A rename the **app** derived
+    (`derived: true`, which is a league sync naming a draft after the league) is numbered like a
+    create rather than refused, and is **skipped entirely** where the user has named the row
+    themselves — a name somebody chose is the more deliberate of the two.
     An imported row is stamped with `origin_share_token` and `origin_author_username`
     (surfaced as `ProjectionOrigin` on both responses), snapshotted at import time so the
     credit survives the share going away.
@@ -140,13 +153,16 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
     projection saved before this had. Like the overrides, its ids are remapped.
   - `Season` / `ScoringType` / `PlayerType` / `ProjectionKind` / `ProjectionPreset` /
     `PlayerBasis` / `PlayerIdSpace` — enums with `@JsonValue` codes (`20262027`, `points`,
-    `skater`, `preset_draft`, `model`, `last_season`, `espn`).
+    `skater`, `draft`, `model`, `last_season`, `espn`).
   - `UserProjectionRepository` / `UserProjectionService` — CRUD scoped to the owning
     user (`findByIdAndUserId` enforces ownership; the unique constraint yields 409).
   - `UserProjectionController` — `/api/v1/users/{userId}/projections` (list/get/create/
-    update/delete). List returns metadata only (no `data`).
-  - `dto/` — `CreateProjectionRequest`, `UpdateProjectionRequest`, `ProjectionResponse`,
-    `ProjectionSummaryResponse`, plus the `ProjectionData` model records.
+    update/delete, plus `POST /{id}/drafts` to start a draft against a board and
+    `PUT /{id}/name` to rename one without sending the board with it). List returns metadata
+    only (no `data`).
+  - `dto/` — `CreateProjectionRequest`, `StartDraftRequest`, `RenameProjectionRequest`,
+    `UpdateProjectionRequest`, `ProjectionResponse`, `ProjectionSummaryResponse`, plus the
+    `ProjectionData` model records.
 - `share/` — feature package (a projection published under a public link):
   - `ProjectionShare` — JPA `@Entity` (UUID id, unique `projection_id`, `user_id`, unique
     `token`, `name`, `season`, `data`, `player_id_space`, timestamps). `data` is a

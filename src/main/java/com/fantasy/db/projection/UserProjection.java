@@ -15,8 +15,9 @@ import java.util.UUID;
 
 @Entity
 /*
- * No uniqueConstraints here, deliberately. The rule is (user_id, name) over everything the user
- * names, and preset drafts sit outside it — a partial index, which JPA cannot express (V19).
+ * No uniqueConstraints here, deliberately. The rule is (user_id, name) within a naming
+ * namespace — the user's boards in one, their drafts in the other — which is two partial
+ * indexes, something JPA cannot express (V19, V25).
  * Declaring the unfiltered version instead would put a constraint in the schema Hibernate builds
  * for tests that production does not have, and would forbid the one overlap that is allowed. The
  * rule lives in the migration, with UserProjectionService.requireFreeName saying it in code.
@@ -39,12 +40,31 @@ public class UserProjection {
     private ProjectionKind kind;
 
     /**
-     * Which preset a {@link ProjectionKind#PRESET_DRAFT} was started from. Null on every other
-     * kind, and on preset drafts stored before the column existed — see V18.
+     * Which preset a {@link ProjectionKind#DRAFT} was started from. Null on every other kind, on
+     * a draft started from one of the user's own boards, and on preset drafts stored before the
+     * column existed — see V18.
      */
     @Enumerated(EnumType.STRING)
     @Column(updatable = false, length = 20)
     private ProjectionPreset preset;
+
+    /**
+     * The board a {@link ProjectionKind#DRAFT} was copied from, where it came from one. Kept for
+     * what it says rather than for what it holds: the draft carries its own copy of the numbers,
+     * so the source may be edited, or deleted (the column is then nulled), without touching a
+     * draft under way.
+     */
+    @Column(name = "source_projection_id", updatable = false)
+    private UUID sourceProjectionId;
+
+    /**
+     * Whether the name is still the one the server gave this row rather than one its owner
+     * typed. A league sync renames a draft to the league's name, and only an auto-named one:
+     * a name someone chose themselves is more deliberate than the default it replaced, and a
+     * sync that overwrote it would be destroying the more considered of the two.
+     */
+    @Column(name = "auto_named", nullable = false)
+    private boolean autoNamed = true;
 
     // Stored as the season's 8-digit code (e.g. "20262027"); exposed as the Season enum.
     // Kept as a plain String column so Hibernate doesn't auto-generate an enum CHECK
@@ -105,6 +125,21 @@ public class UserProjection {
     }
 
     /**
+     * A draft against one of the user's own boards: a copy of that board's numbers with the
+     * draft's own picks in it. A copy rather than a reference, so editing the board — or
+     * deleting it — leaves a draft already under way exactly as it was, and so that ten drafts
+     * off one board are ten independent boards.
+     */
+    public static UserProjection draftFrom(UserProjection source, String name, ProjectionData data) {
+        Instant now = Instant.now();
+        UserProjection draft = new UserProjection(UUID.randomUUID(), source.getUserId(), name,
+                ProjectionKind.DRAFT, null, source.getSeason(), data, null, null, now, now);
+        draft.sourceProjectionId = source.getId();
+        draft.playerIdSpace = source.playerIdSpace;
+        return draft;
+    }
+
+    /**
      * The id space comes from the share rather than defaulting: the rows are a copy of what was
      * published, so a board already remapped to ESPN's numbering must not look to a later remap
      * pass like one still on Yahoo's.
@@ -122,6 +157,17 @@ public class UserProjection {
     public void update(String name, ProjectionData data) {
         this.name = name;
         this.data = data;
+        this.updatedAt = Instant.now();
+    }
+
+    /**
+     * Renames the row. {@code autoNamed} says who chose the name: false for one its owner typed,
+     * true for one the server derived (a draft named after the league it was just synced with),
+     * which stays open to being derived again.
+     */
+    public void rename(String name, boolean autoNamed) {
+        this.name = name;
+        this.autoNamed = autoNamed;
         this.updatedAt = Instant.now();
     }
 
@@ -143,6 +189,19 @@ public class UserProjection {
 
     public ProjectionPreset getPreset() {
         return preset;
+    }
+
+    public UUID getSourceProjectionId() {
+        return sourceProjectionId;
+    }
+
+    public boolean isAutoNamed() {
+        return autoNamed;
+    }
+
+    /** Forgets a source board that has been deleted, leaving the draft itself untouched. */
+    public void clearSourceProjection() {
+        this.sourceProjectionId = null;
     }
 
     public Season getSeason() {

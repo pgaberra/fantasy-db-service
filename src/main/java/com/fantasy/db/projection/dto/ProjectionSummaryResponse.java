@@ -13,15 +13,24 @@ public record ProjectionSummaryResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String id,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String name,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ProjectionKind kind,
-        @Schema(description = "Which preset a preset draft was started from. Absent on any other "
-                + "kind, and on preset drafts stored before this was recorded.")
+        @Schema(description = "Which preset a draft was started from. Absent on any other kind, "
+                + "on a draft started from one of the user's own boards, and on preset drafts "
+                + "stored before this was recorded.")
         ProjectionPreset preset,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Season season,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant createdAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant updatedAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) DraftStatus draftStatus,
         @Schema(description = "Who the board was copied from, on an imported projection. Absent on the user's own.")
-        ProjectionOrigin origin
+        ProjectionOrigin origin,
+        @Schema(description = "The board a draft was started from. Absent on anything that is not "
+                + "a draft, on a draft started from a preset, and once that board is deleted — "
+                + "the draft holds its own copy of the numbers and outlives it.")
+        String sourceProjectionId,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Whether the name is still the one the server gave this row. False "
+                        + "once its owner has named it, which a derived rename then leaves alone.")
+        boolean autoNamed
 ) {
     public static ProjectionSummaryResponse from(UserProjection projection) {
         return new ProjectionSummaryResponse(
@@ -33,7 +42,10 @@ public record ProjectionSummaryResponse(
                 projection.getCreatedAt(),
                 projection.getUpdatedAt(),
                 draftStatusOf(projection.getData()),
-                ProjectionOrigin.from(projection));
+                ProjectionOrigin.from(projection),
+                projection.getSourceProjectionId() == null
+                        ? null : projection.getSourceProjectionId().toString(),
+                projection.isAutoNamed());
     }
 
     private static DraftStatus draftStatusOf(ProjectionData data) {
