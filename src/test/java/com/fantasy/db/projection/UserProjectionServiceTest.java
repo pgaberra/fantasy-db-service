@@ -1,5 +1,8 @@
 package com.fantasy.db.projection;
 
+import com.fantasy.db.projection.dto.DraftPick;
+import com.fantasy.db.projection.dto.DraftState;
+import com.fantasy.db.projection.dto.DraftTeam;
 import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.PositionOverride;
@@ -403,6 +406,84 @@ class UserProjectionServiceTest {
 
         assertThat(updated.getData().positionOverrides())
                 .containsExactly(new PositionOverride(1, List.of(SkaterPosition.D)));
+    }
+
+    private UserProjection follow(String name) {
+        return userProjectionRepository.save(UserProjection.followOf(
+                userId, name, Season.SEASON_2026_2027, sampleData(), "t0k3n", "alex",
+                PlayerIdSpace.YAHOO));
+    }
+
+    private static DraftState draft(int playerId) {
+        return new DraftState(List.of(new DraftTeam("t1", "Mine", true)), List.of("t1"),
+                List.of(new DraftPick(playerId, "t1")), null, null);
+    }
+
+    /**
+     * A follow of a share link is the author's board in the follower's account. Draft mode and the
+     * clear-draft path send the name and settings back exactly as they loaded them, so what they
+     * send is ignored rather than refused — a publish landing between the load and the save would
+     * otherwise turn a pick into an error.
+     */
+    @Test
+    void anUpdateToAFollowTakesNothingButItsDraft() {
+        UserProjection followed = follow("Their board");
+
+        UserProjection updated = userProjectionService.update(userId, followed.getId(), "Mine now",
+                new UpdateProjectionData(
+                        new ProjectionSettings(ScoringType.CATEGORY, Map.of("goals", 99.0),
+                                List.of("goals"), List.of("gp"), Map.of(), Map.of(), false, 20,
+                                null, null, null, null, null, null, null, null, null),
+                        List.of(new PlayerProjection(999, PlayerType.GOALIE,
+                                new PlayerStats(Map.of("gp", 1.0), Map.of()))),
+                        draft(1),
+                        List.of(new PositionOverride(1, List.of(SkaterPosition.C)))));
+
+        assertThat(updated.getName()).isEqualTo("Their board");
+        assertThat(updated.getData().settings().scoringType()).isEqualTo(ScoringType.POINTS);
+        assertThat(updated.getData().settings().leagueSize()).isEqualTo(12);
+        assertThat(updated.getData().players()).extracting(PlayerProjection::playerId)
+                .containsExactly(1);
+        assertThat(updated.getData().positionOverrides()).isNull();
+        assertThat(updated.getData().draft()).isEqualTo(draft(1));
+    }
+
+    /** An omitted draft clears one, on a follow as on any other projection. */
+    @Test
+    void clearingTheDraftStillWorksOnAFollow() {
+        UserProjection followed = follow("Their board");
+        userProjectionService.update(userId, followed.getId(), "Their board",
+                new UpdateProjectionData(sampleData().settings(), null, draft(1), null));
+
+        UserProjection cleared = userProjectionService.update(userId, followed.getId(),
+                "Their board", new UpdateProjectionData(sampleData().settings(), null, null, null));
+
+        assertThat(cleared.getData().draft()).isNull();
+    }
+
+    /** The list is ordered by the stamp, and a save that changed no pick is not an edit. */
+    @Test
+    void aFollowsStampMovesOnlyWhenItsDraftDoes() {
+        UserProjection followed = follow("Their board");
+        Instant stamped = followed.getUpdatedAt();
+
+        UserProjection saved = userProjectionService.update(userId, followed.getId(), "Their board",
+                new UpdateProjectionData(sampleData().settings(), null, null, null));
+
+        assertThat(saved.getUpdatedAt()).isEqualTo(stamped);
+    }
+
+    /**
+     * A follow is named by its author, who may rename their board to anything; the follower's own
+     * names are theirs. Neither may block the other, so they are separate namespaces (V25).
+     */
+    @Test
+    void aFollowNeitherTakesNorBlocksTheUsersOwnNames() {
+        follow("Their board");
+
+        UserProjection own = create("Their board");
+
+        assertThat(own.getName()).isEqualTo("Their board");
     }
 
     @Test

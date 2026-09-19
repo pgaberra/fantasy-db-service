@@ -1,5 +1,6 @@
 package com.fantasy.db.projection;
 
+import com.fantasy.db.projection.dto.DraftState;
 import com.fantasy.db.projection.dto.ProjectionData;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -11,13 +12,15 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 @Entity
 /*
- * No uniqueConstraints here, deliberately. The rule is (user_id, name) within a naming
- * namespace — the user's boards in one, their drafts in the other — which is two partial
- * indexes, something JPA cannot express (V19, V25).
+ * No uniqueConstraints here, deliberately. The rule is (user_id, name) over everything the user
+ * names, and drafts and follows sit outside it — partial indexes, which JPA cannot express
+ * (V19, narrowed by V25, split into two namespaces by V26). So is one follow per (user, share),
+ * and so is the foreign key that takes a follow away with its share (V25).
  * Declaring the unfiltered version instead would put a constraint in the schema Hibernate builds
  * for tests that production does not have, and would forbid the one overlap that is allowed. The
  * rule lives in the migration, with UserProjectionService.requireFreeName saying it in code.
@@ -40,9 +43,8 @@ public class UserProjection {
     private ProjectionKind kind;
 
     /**
-     * Which preset a {@link ProjectionKind#DRAFT} was started from. Null on every other kind, on
-     * a draft started from one of the user's own boards, and on preset drafts stored before the
-     * column existed — see V18.
+     * Which preset a {@link ProjectionKind#DRAFT} was started from. Null on every other
+     * kind, and on preset drafts stored before the column existed — see V18.
      */
     @Enumerated(EnumType.STRING)
     @Column(updatable = false, length = 20)
@@ -51,17 +53,18 @@ public class UserProjection {
     /**
      * The board a {@link ProjectionKind#DRAFT} was copied from, where it came from one. Kept for
      * what it says rather than for what it holds: the draft carries its own copy of the numbers,
-     * so the source may be edited, or deleted (the column is then nulled), without touching a
-     * draft under way.
+     * so the source may be edited, or deleted, without touching a draft under way — there is no
+     * foreign key, and {@code UserProjectionService.delete} nulls it instead, so the tests and
+     * production behave alike. Null on a draft against a preset.
      */
     @Column(name = "source_projection_id", updatable = false)
     private UUID sourceProjectionId;
 
     /**
-     * Whether the name is still the one the server gave this row rather than one its owner
-     * typed. A league sync renames a draft to the league's name, and only an auto-named one:
-     * a name someone chose themselves is more deliberate than the default it replaced, and a
-     * sync that overwrote it would be destroying the more considered of the two.
+     * Whether the name is still the one the server gave this row rather than one its owner typed.
+     * A league sync renames a draft to the league's name, and only an auto-named one: a name
+     * somebody chose themselves is more deliberate than the default it replaced, and a sync that
+     * overwrote it would be destroying the more considered of the two.
      */
     @Column(name = "auto_named", nullable = false)
     private boolean autoNamed = true;
@@ -126,9 +129,9 @@ public class UserProjection {
 
     /**
      * A draft against one of the user's own boards: a copy of that board's numbers with the
-     * draft's own picks in it. A copy rather than a reference, so editing the board — or
-     * deleting it — leaves a draft already under way exactly as it was, and so that ten drafts
-     * off one board are ten independent boards.
+     * draft's own picks in it. A copy rather than a reference, so editing the board — or deleting
+     * it — leaves a draft already under way exactly as it was, and so that ten drafts off one
+     * board are ten independent boards.
      */
     public static UserProjection draftFrom(UserProjection source, String name, ProjectionData data) {
         Instant now = Instant.now();
@@ -140,24 +143,28 @@ public class UserProjection {
     }
 
     /**
-     * The id space comes from the share rather than defaulting: the rows are a copy of what was
-     * published, so a board already remapped to ESPN's numbering must not look to a later remap
-     * pass like one still on Yahoo's.
+     * A follow of a share link: an imported board that keeps mirroring the author's, see
+     * {@link #mirror}. The id space comes from the share rather than defaulting: the rows are a
+     * copy of what was published, so a board already remapped to ESPN's numbering must not look to
+     * a later remap pass like one still on Yahoo's.
      */
-    public static UserProjection importedFrom(UUID userId, String name, Season season, ProjectionData data,
-                                              String shareToken, String authorUsername,
-                                              PlayerIdSpace playerIdSpace) {
+    public static UserProjection followOf(UUID userId, String name, Season season, ProjectionData data,
+                                          String shareToken, String authorUsername,
+                                          PlayerIdSpace playerIdSpace) {
         Instant now = Instant.now();
-        UserProjection imported = new UserProjection(UUID.randomUUID(), userId, name,
+        UserProjection follow = new UserProjection(UUID.randomUUID(), userId, name,
                 ProjectionKind.IMPORTED, null, season, data, shareToken, authorUsername, now, now);
-        imported.playerIdSpace = playerIdSpace.getCode();
-        return imported;
+        follow.playerIdSpace = playerIdSpace.getCode();
+        return follow;
     }
 
-    public void update(String name, ProjectionData data) {
-        this.name = name;
-        this.data = data;
-        this.updatedAt = Instant.now();
+    /**
+     * Whether this row follows a share link. Only an import stamped with the link it came from
+     * does; a spreadsheet import is {@code IMPORTED} too but came from no link, and is the user's
+     * own to edit.
+     */
+    public boolean isFollow() {
+        return kind == ProjectionKind.IMPORTED && originShareToken != null;
     }
 
     /**
@@ -168,6 +175,37 @@ public class UserProjection {
     public void rename(String name, boolean autoNamed) {
         this.name = name;
         this.autoNamed = autoNamed;
+        this.updatedAt = Instant.now();
+    }
+
+    public void update(String name, ProjectionData data) {
+        this.name = name;
+        this.data = data;
+        this.updatedAt = Instant.now();
+    }
+
+    /**
+     * Takes the author's board as it now stands, under the name they now give it, and keeps the
+     * follower's own draft: the board is the author's, the picks made against it are not.
+     */
+    public void mirror(String name, ProjectionData board, PlayerIdSpace space) {
+        this.name = name;
+        this.data = new ProjectionData(board.settings(), board.players(), data.draft(),
+                board.positionOverrides());
+        this.playerIdSpace = space.getCode();
+        this.updatedAt = Instant.now();
+    }
+
+    /**
+     * The one thing a follower may change on a follow. The stamp moves only when the draft does,
+     * since the list orders by it and an unchanged save is not an edit.
+     */
+    public void updateDraft(DraftState draft) {
+        if (Objects.equals(draft, data.draft())) {
+            return;
+        }
+        this.data = new ProjectionData(data.settings(), data.players(), draft,
+                data.positionOverrides());
         this.updatedAt = Instant.now();
     }
 

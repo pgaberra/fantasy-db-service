@@ -21,7 +21,9 @@ public record ProjectionSummaryResponse(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant createdAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant updatedAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) DraftStatus draftStatus,
-        @Schema(description = "Who the board was copied from, on an imported projection. Absent on the user's own.")
+        @Schema(description = "The share link this board follows, and who published it. Present "
+                + "only on a follow, which is read-only apart from its draft. Absent on the "
+                + "user's own boards, including a copy taken from a link.")
         ProjectionOrigin origin,
         @Schema(description = "The board a draft was started from. Absent on anything that is not "
                 + "a draft, on a draft started from a preset, and once that board is deleted — "

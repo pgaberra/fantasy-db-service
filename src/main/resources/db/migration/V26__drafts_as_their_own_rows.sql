@@ -21,7 +21,9 @@ ALTER TABLE user_projections ADD COLUMN auto_named BOOLEAN NOT NULL DEFAULT TRUE
 UPDATE user_projections SET kind = 'DRAFT' WHERE kind = 'PRESET_DRAFT';
 
 -- Every draft still held inside a board becomes a row beside it, carrying that board's rows and
--- corrections (the whole of `data`, draft included) and pointing back at where it came from. The
+-- corrections (the whole of `data`, draft included) and pointing back at where it came from. A
+-- board that follows a share link is included: the picks on it were the follower's own, and a
+-- follow is rewritten whenever its author publishes, so they belong outside it. The
 -- board's timestamps come with it: when it was last picked in is what the draft list sorts by,
 -- and the board's `updated_at` is that moment, since a pick was the last thing written to it.
 INSERT INTO user_projections (id, user_id, name, kind, preset, season, data, player_id_space,
@@ -78,12 +80,13 @@ END $$;
 DROP INDEX uk_user_projections_user_preset_draft;
 
 -- The two namespaces, said as two partial indexes. V19's excluded preset drafts from the boards'
--- namespace; this excludes every draft, and gives the drafts one of their own.
+-- namespace and V25 narrowed it again to leave out the follows, which their authors name; this
+-- excludes every draft from it, and gives the drafts a namespace of their own.
 DROP INDEX uk_user_projections_user_name;
 
 CREATE UNIQUE INDEX uk_user_projections_user_name
     ON user_projections (user_id, name)
-    WHERE kind <> 'DRAFT';
+    WHERE kind <> 'DRAFT' AND origin_share_token IS NULL;
 
 CREATE UNIQUE INDEX uk_user_projections_user_draft_name
     ON user_projections (user_id, name)

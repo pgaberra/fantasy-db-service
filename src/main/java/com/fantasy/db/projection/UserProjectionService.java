@@ -9,9 +9,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
@@ -50,12 +48,12 @@ public class UserProjectionService {
     public UserProjection create(UUID userId, String name, ProjectionKind kind,
                                  ProjectionPreset preset, ProjectionData data,
                                  PlayerIdSpace playerIdSpace) {
-        // Nothing stored here is limited in number any more. A user's own boards and the ones
-        // they import never were; drafts stopped being, once a draft became a row of its own
-        // rather than a field on the board it was started from - ten mocks off one projection is
-        // a normal thing to want, and the old model could not hold the second one. A name the
-        // user already holds is numbered rather than refused. The season is stamped from config,
-        // not supplied by the caller.
+        // Nothing stored here is limited in number. A user's own boards and the ones they import
+        // never were; drafts stopped being with V26, which made a draft a row of its own rather
+        // than a field on the board it was played against - ten mocks off one projection is a
+        // normal thing to want, and the old shape could not hold the second one. A name the user
+        // already holds is numbered rather than refused. The season is stamped from config, not
+        // supplied by the caller.
         String savedName = freeNameFrom(userId, name, kind);
         requireFreeName(userId, savedName, kind, null);
         return userProjectionRepository.save(
@@ -68,8 +66,9 @@ public class UserProjectionService {
      *
      * <p>A copy, not a reference. A draft ranks by the numbers it was started against, and those
      * have to stop moving once it has: an edit in the editor mid-draft would re-rank a board
-     * somebody is picking from, and the board's owner may delete it while a draft against it is
-     * still open. It is also what makes a second draft off the same board free of the first.
+     * somebody is picking from, a follow of a share link is rewritten whenever its author
+     * publishes, and a board can be deleted while a draft against it is still open. It is also
+     * what makes a second draft off the same board free of the first.
      *
      * <p>The name defaults to the board's, numbered where another draft holds it already
      * ("Board (2)"): starting a draft is a button press and not a form, so a clash is settled
@@ -101,6 +100,11 @@ public class UserProjectionService {
     @Transactional
     public UserProjection rename(UUID userId, UUID id, String name, boolean autoNamed) {
         UserProjection projection = findById(userId, id);
+        if (projection.isFollow()) {
+            throw new IllegalStateException(
+                    "This board follows a share link and is named by its author. Take a copy to "
+                            + "name it yourself.");
+        }
         String trimmed = name.trim();
         requireFreeName(userId, trimmed, projection.getKind(), id);
         projection.rename(trimmed, autoNamed);
@@ -109,8 +113,8 @@ public class UserProjectionService {
 
     /**
      * Renames a row to a name the server derived - a draft taking the name of the league it was
-     * just synced with - and does nothing at all where the owner has named it themselves. A
-     * clash is numbered rather than refused, since nobody typed this name either.
+     * just synced with - and does nothing at all where the owner has named it themselves. A clash
+     * is numbered rather than refused, since nobody typed this name either.
      *
      * <p>Returns the row as it stands, renamed or not, so the caller shows what is stored rather
      * than what it proposed.
@@ -118,7 +122,7 @@ public class UserProjectionService {
     @Transactional
     public UserProjection renameDerived(UUID userId, UUID id, String name) {
         UserProjection projection = findById(userId, id);
-        if (!projection.isAutoNamed()) {
+        if (!projection.isAutoNamed() || projection.isFollow()) {
             return projection;
         }
         String preferred = name.trim();
@@ -133,24 +137,27 @@ public class UserProjectionService {
 
     /**
      * Refuses a name the user is already keeping something else under, within the namespace that
-     * name lives in. One namespace covers the boards they can see and name - their own
-     * projections and the ones they imported - because those are listed together and read by
-     * name, so two rows sharing one are only told apart by the smaller line beneath them.
+     * name lives in. One namespace covers the boards they name — their own projections and the
+     * spreadsheets they imported — because those are listed together and read by name, so two
+     * rows sharing one are only told apart by the smaller line beneath them.
      *
-     * <p>Their drafts are a second namespace, apart from the first in both directions. A draft is
-     * named after the board it was started from, so a shared namespace would number every draft
-     * the moment it was created; and the two are never listed together.
+     * <p>Their drafts are a second namespace, apart from the first in both directions: a draft is
+     * named after the board it was started from, so one shared namespace would number every draft
+     * the moment it was created, and the two are never listed together.
      *
-     * <p>The partial unique indexes added in V19 and V25 say the same thing and are what make it
-     * true under a race. This check is what makes the failure legible: it names the projection
-     * that is in the way, before a row is written.
+     * <p>A follow of a share link is outside both: the author names that one, and renames it
+     * whenever they like, so a rename of theirs must never collide with a name the follower chose.
      *
-     * <p>This is the refusal a <b>rename</b> gets, and the last word after a create or an import
-     * has already settled on a name with {@link #freeNameFrom}: there the name is free by the
-     * time it is checked, so only a request racing this one can trip it.
+     * <p>The partial unique indexes added in V19, narrowed by V25 and split in two by V26 say the
+     * same thing and are what make it true under a race. This check is what makes the failure
+     * legible: it names the projection that is in the way, before a row is written.
      *
-     * <p>Public because there are three write paths into this table and one rule over all of
-     * them: a projection created here, a draft started here, and a board imported by
+     * <p>This is the refusal a <b>rename</b> gets, and the last word after a create, an import or
+     * a started draft has already settled on a name with {@link #freeNameFrom}: there the name is
+     * free by the time it is checked, so only a request racing this one can trip it.
+     *
+     * <p>Public because there are several write paths into this table and one rule over all of
+     * them: a projection created here, a draft started here, and a board copied by
      * {@code ProjectionImportService}. A copy of this check living beside another write is a copy
      * that can drift.
      *
@@ -163,31 +170,28 @@ public class UserProjectionService {
         }
     }
 
-    /** The kinds a name has to be distinct across, for a row of this kind. */
-    private static Set<ProjectionKind> namespaceOf(ProjectionKind kind) {
-        return kind.isDraft()
-                ? EnumSet.of(ProjectionKind.DRAFT)
-                : EnumSet.complementOf(EnumSet.of(ProjectionKind.DRAFT));
-    }
-
     /**
      * The name a copy can actually be saved under: the preferred one where it is free, and
      * {@code "<preferred> (2)"}, {@code " (3)"} and so on where it is not.
      *
+     * <p>A preferred name longer than the column takes is cut to fit before anything else: the
+     * names this is asked for are not all typed by a user, and {@code "Copy of "} in front of one
+     * at the cap makes a name no column would hold.
+     *
      * <p>The same shape {@code V19} used when it had to break the ties already in the table, so a
-     * board renamed by that migration, one imported today and a second draft off one projection
-     * all read alike. Truncated the same way too - the suffix has to fit inside the hundred
-     * characters a name gets, and a name at the cap would otherwise grow past it.
+     * board renamed by that migration, one copied today and a second draft off one projection all
+     * read alike. Truncated the same way too — the suffix has to fit inside the hundred characters
+     * a name gets, and a name at the cap would otherwise grow past it.
      *
      * <p>Bounded, and the bound is not a formality: the unique index is what actually settles a
      * race, so two writes landing together can still collide on a name this found free a moment
      * ago. Running out returns the preferred name and lets {@link #requireFreeName} refuse it,
      * which is the answer the caller used to get for every repeat.
      *
-     * <p>Every create goes through here, not only an import. Saving a board is not a question the
+     * <p>Every create goes through here, not only a copy. Saving a board is not a question the
      * server should answer with "no": the numbers a user came for are already made, and a name
-     * they can rename afterwards is a smaller thing than losing the save. A <b>rename</b> is
-     * still refused, because there the name is the whole of what was asked for.
+     * they can rename afterwards is a smaller thing than losing the save. A <b>rename</b> is still
+     * refused, because there the name is the whole of what was asked for.
      */
     public String freeNameFrom(UUID userId, String preferred, ProjectionKind kind) {
         return freeNameFrom(userId, preferred, kind, null);
@@ -195,6 +199,9 @@ public class UserProjectionService {
 
     /** @param excludedId the row being renamed, which is not its own conflict; null on a create */
     public String freeNameFrom(UUID userId, String preferred, ProjectionKind kind, UUID excludedId) {
+        preferred = preferred.length() > MAX_NAME_LENGTH
+                ? preferred.substring(0, MAX_NAME_LENGTH)
+                : preferred;
         if (!isTaken(userId, preferred, kind, excludedId)) {
             return preferred;
         }
@@ -207,12 +214,21 @@ public class UserProjectionService {
         return preferred;
     }
 
+    /** Whether the name is taken inside the namespace a row of this kind is named in. */
     private boolean isTaken(UUID userId, String name, ProjectionKind kind, UUID excludedId) {
+        if (kind.isDraft()) {
+            return excludedId == null
+                    ? userProjectionRepository.existsByUserIdAndNameAndKind(
+                            userId, name, ProjectionKind.DRAFT)
+                    : userProjectionRepository.existsByUserIdAndNameAndKindAndIdNot(
+                            userId, name, ProjectionKind.DRAFT, excludedId);
+        }
         return excludedId == null
-                ? userProjectionRepository.existsByUserIdAndNameAndKindIn(
-                        userId, name, namespaceOf(kind))
-                : userProjectionRepository.existsByUserIdAndNameAndKindInAndIdNot(
-                        userId, name, namespaceOf(kind), excludedId);
+                ? userProjectionRepository.existsByUserIdAndNameAndKindNotAndOriginShareTokenIsNull(
+                        userId, name, ProjectionKind.DRAFT)
+                : userProjectionRepository
+                        .existsByUserIdAndNameAndKindNotAndOriginShareTokenIsNullAndIdNot(
+                                userId, name, ProjectionKind.DRAFT, excludedId);
     }
 
     private static String withSuffix(String preferred, int suffix) {
@@ -239,6 +255,13 @@ public class UserProjectionService {
      * initialises the field to an empty {@code ArrayList}, so a body that leaves {@code players}
      * out arrives here as empty rather than null. Treating that as "replace with nothing" wiped
      * every player from a projection the moment its owner changed a setting.
+     *
+     * <p><b>A follow of a share link takes only its draft.</b> The board, its name and its
+     * settings are the author's, mirrored in on every publish, so whatever else the request says
+     * is ignored rather than refused: draft mode and the clear-draft path send the settings and
+     * name back exactly as they loaded them, and a publish landing in between would otherwise
+     * turn a pick into an error. Enforced here rather than trusted to a caller, since this is the
+     * one write path every save goes through.
      */
     @Transactional
     public UserProjection update(UUID userId, UUID id, String name, UpdateProjectionData incoming) {
@@ -255,11 +278,16 @@ public class UserProjectionService {
     @Transactional
     public UserProjection update(UUID userId, UUID id, String name, UpdateProjectionData incoming,
                                  PlayerIdSpace callerSpace) {
-        UserProjection projection = findById(userId, id);
+        UserProjection projection = userProjectionRepository.findByIdAndUserIdForUpdate(id, userId)
+                .orElseThrow(() -> new NoSuchElementException("No projection found with id: " + id));
         if (callerSpace != null && callerSpace != projection.getPlayerIdSpace()) {
             throw new IllegalStateException(("This projection's player ids are %s's and the "
                     + "update was built from %s's player pool. Nothing was written.")
                     .formatted(projection.getPlayerIdSpace().getCode(), callerSpace.getCode()));
+        }
+        if (projection.isFollow()) {
+            projection.updateDraft(incoming.draft());
+            return userProjectionRepository.save(projection);
         }
         // A rename has to answer to the same rule a new name does, or the rule is only a rule
         // until someone edits. Its own row is not the conflict.
@@ -277,8 +305,8 @@ public class UserProjectionService {
     }
 
     /**
-     * Deletes a row. A draft started from it keeps everything it holds - the numbers are its own
-     * copy - and only forgets where they came from. Unhooked here rather than by a foreign key,
+     * Deletes a row. A draft started from it keeps everything it holds — the numbers are its own
+     * copy — and only forgets where they came from. Unhooked here rather than by a foreign key,
      * so that what the tests run against and what production runs are the same thing.
      */
     @Transactional
