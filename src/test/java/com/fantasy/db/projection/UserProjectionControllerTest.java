@@ -30,6 +30,7 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -72,6 +73,24 @@ class UserProjectionControllerTest {
                   { "playerId": 1, "type": "skater",
                     "stats": { "utility": { "gp": 82 }, "scoring": { "goals": 64 } } }
                 ]
+              }
+            }
+            """;
+
+    private static final String START_DRAFT_BODY = """
+            {
+              "name": "My mock",
+              "data": {
+                "settings": {
+                  "scoringType": "points",
+                  "statWeights": { "goals": 4.5 },
+                  "activeScoringColumns": ["goals"],
+                  "activeUtilityColumns": ["gp"],
+                  "scaleSettings": {},
+                  "decimalSettings": { "goals": 0 },
+                  "useDefaultDecimals": true
+                },
+                "players": []
               }
             }
             """;
@@ -137,13 +156,13 @@ class UserProjectionControllerTest {
     }
 
     @Test
-    void listExposesTheKindSoCallersCanTellPresetDraftsApart() throws Exception {
+    void listExposesTheKindSoCallersCanTellDraftsApartFromBoards() throws Exception {
         when(userProjectionService.findAll(USER_ID)).thenReturn(
-                List.of(projection("Last Season's Stats", draft(null), ProjectionKind.PRESET_DRAFT)));
+                List.of(projection("Last Season's Stats", draft(null), ProjectionKind.DRAFT)));
 
         mockMvc.perform(get("/api/v1/users/{userId}/projections", USER_ID))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].kind").value("preset_draft"));
+                .andExpect(jsonPath("$[0].kind").value("draft"));
     }
 
     @Test
@@ -194,18 +213,18 @@ class UserProjectionControllerTest {
 
     @Test
     void createStoresTheRequestedKind() throws Exception {
-        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any(), any(), any()))
-                .thenReturn(projection("My league", null, ProjectionKind.PRESET_DRAFT));
+        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.DRAFT), any(), any(), any()))
+                .thenReturn(projection("My league", null, ProjectionKind.DRAFT));
 
         mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_BODY.replace("\"name\": \"My league\",",
-                                "\"name\": \"My league\", \"kind\": \"preset_draft\",")))
+                                "\"name\": \"My league\", \"kind\": \"draft\",")))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.kind").value("preset_draft"));
+                .andExpect(jsonPath("$.kind").value("draft"));
 
         verify(userProjectionService)
-                .create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any(), any(), any());
+                .create(eq(USER_ID), eq("My league"), eq(ProjectionKind.DRAFT), any(), any(), any());
     }
 
     @Test
@@ -311,23 +330,6 @@ class UserProjectionControllerTest {
                 .andExpect(jsonPath("$.name").value("My league (2)"));
     }
 
-    /** The conflict a create can still answer with: a second draft against the same preset. */
-    @Test
-    void createReturns409WhenTheUserAlreadyHasADraftAgainstThatPreset() throws Exception {
-        when(userProjectionService.create(eq(USER_ID), eq("My league"), eq(ProjectionKind.PRESET_DRAFT), any(), any(), any()))
-                .thenThrow(new DataIntegrityViolationException("User already has a projection of kind preset_draft"));
-
-        mockMvc.perform(post("/api/v1/users/{userId}/projections", USER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(VALID_BODY.replace("\"name\": \"My league\",",
-                                "\"name\": \"My league\", \"kind\": \"preset_draft\",")))
-                .andExpect(status().isConflict());
-    }
-
-    /**
-     * An autosave that only moved a stat weight sends settings alone — about a kilobyte instead of
-     * the ~0.5 MB of player rows it did not touch.
-     */
     @Test
     void updateAcceptsABodyWithoutPlayers() throws Exception {
         ArgumentCaptor<UpdateProjectionData> sent = ArgumentCaptor.forClass(UpdateProjectionData.class);
@@ -459,5 +461,91 @@ class UserProjectionControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(userProjectionService, never()).create(any(), any(), any(), any(), any(), any());
+    }
+    @Test
+    void startDraftReturns201WithTheDraftTheServerSaved() throws Exception {
+        when(userProjectionService.startDraft(eq(USER_ID), eq(PROJECTION_ID), eq("My mock"), any()))
+                .thenReturn(projection("My mock", null, ProjectionKind.DRAFT));
+
+        mockMvc.perform(post("/api/v1/users/{userId}/projections/{id}/drafts", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(START_DRAFT_BODY))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.kind").value("draft"))
+                .andExpect(jsonPath("$.name").value("My mock"));
+    }
+
+    /**
+     * The name is the server's to settle, so the caller may leave it out and take the board's.
+     */
+    @Test
+    void startDraftMayOmitTheName() throws Exception {
+        when(userProjectionService.startDraft(eq(USER_ID), eq(PROJECTION_ID), eq(null), any()))
+                .thenReturn(projection("My league", null, ProjectionKind.DRAFT));
+
+        mockMvc.perform(post("/api/v1/users/{userId}/projections/{id}/drafts", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(START_DRAFT_BODY.replace("\"name\": \"My mock\",", "")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("My league"));
+    }
+
+    @Test
+    void startDraftReturns404WhenTheBoardIsNotTheUsers() throws Exception {
+        when(userProjectionService.startDraft(any(), any(), any(), any()))
+                .thenThrow(new NoSuchElementException("No projection found with id: " + PROJECTION_ID));
+
+        mockMvc.perform(post("/api/v1/users/{userId}/projections/{id}/drafts", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(START_DRAFT_BODY))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void renameReturnsTheSavedName() throws Exception {
+        when(userProjectionService.rename(USER_ID, PROJECTION_ID, "Mock #3", false))
+                .thenReturn(projection("Mock #3", null, ProjectionKind.DRAFT));
+
+        mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}/name", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"Mock #3\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Mock #3"));
+    }
+
+    /** A derived name (a league sync's) takes the other path, which may decline to rename at all. */
+    @Test
+    void renameRoutesADerivedNameToTheDerivedPath() throws Exception {
+        when(userProjectionService.renameDerived(USER_ID, PROJECTION_ID, "Beer League"))
+                .thenReturn(projection("Mock #3", null, ProjectionKind.DRAFT));
+
+        mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}/name", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"Beer League\", \"derived\": true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Mock #3"));
+
+        verify(userProjectionService, never()).rename(any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void renameReturns400OnABlankName() throws Exception {
+        mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}/name", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"  \"}"))
+                .andExpect(status().isBadRequest());
+
+        verify(userProjectionService, never()).rename(any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void renameReturns409WhenAnotherRowHoldsTheName() throws Exception {
+        when(userProjectionService.rename(USER_ID, PROJECTION_ID, "Taken", false))
+                .thenThrow(new DataIntegrityViolationException("User already has a projection named Taken"));
+
+        mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}/name", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"Taken\"}"))
+                .andExpect(status().isConflict());
     }
 }

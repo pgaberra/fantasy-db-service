@@ -15,8 +15,6 @@ public interface UserProjectionRepository extends JpaRepository<UserProjection, 
 
     Optional<UserProjection> findByIdAndUserId(UUID id, UUID userId);
 
-    boolean existsByUserIdAndKindAndPreset(UUID userId, ProjectionKind kind, ProjectionPreset preset);
-
     /**
      * The row an update is about to rewrite, locked until the update commits. A follow is written
      * by two parties — its owner saving a draft, and the author's publish mirroring the board into
@@ -28,9 +26,9 @@ public interface UserProjectionRepository extends JpaRepository<UserProjection, 
     Optional<UserProjection> findByIdAndUserIdForUpdate(UUID id, UUID userId);
 
     /**
-     * Whether the user already keeps something under this name. Preset drafts are excluded
-     * because the server names those after their preset and never lists them as the user's own
-     * work, and follows because the author names those — see the partial index in V19 and V25.
+     * Whether the user already keeps a board under this name. Drafts are excluded because they
+     * are a namespace of their own — a draft is named after the board it was started from — and
+     * follows because the author names those; see the partial indexes in V19, V25 and V26.
      */
     boolean existsByUserIdAndNameAndKindNotAndOriginShareTokenIsNull(
             UUID userId, String name, ProjectionKind kind);
@@ -38,6 +36,15 @@ public interface UserProjectionRepository extends JpaRepository<UserProjection, 
     /** The same question for a rename, where the row being renamed is not its own conflict. */
     boolean existsByUserIdAndNameAndKindNotAndOriginShareTokenIsNullAndIdNot(
             UUID userId, String name, ProjectionKind kind, UUID id);
+
+    /** The same question inside the drafts' own namespace. */
+    boolean existsByUserIdAndNameAndKind(UUID userId, String name, ProjectionKind kind);
+
+    boolean existsByUserIdAndNameAndKindAndIdNot(
+            UUID userId, String name, ProjectionKind kind, UUID id);
+
+    /** The drafts started from a board, to unhook when that board is deleted. */
+    List<UserProjection> findBySourceProjectionId(UUID sourceProjectionId);
 
     Optional<UserProjection> findByUserIdAndOriginShareToken(UUID userId, String originShareToken);
 
