@@ -86,8 +86,9 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
 - `projection/` — feature package (saved player projections, scoped to a user):
   - `UserProjection` — JPA `@Entity` (UUID id, `user_id`, `name`, `kind`, `preset`, `season`,
     `data`, `player_id_space`, `origin_share_token`, `origin_author_username`, `created_at`,
-    `updated_at`; unique `(user_id, name)` over everything but a preset draft, and unique
-    `(user_id, preset)` over preset drafts, see `V19`). `data` is the **modelled,
+    `updated_at`; unique `(user_id, name)` over everything but a preset draft and a follow,
+    unique `(user_id, preset)` over preset drafts, and unique `(origin_share_token, user_id)`
+    over follows, see `V19` and `V25`). `data` is the **modelled,
     validated** `ProjectionData` (settings + per-player stats) stored in a **`jsonb`**
     column (`@JdbcTypeCode(SqlTypes.JSON)`). `season` is stamped from the
     `projections.current-season` config (the caller never sends it — not in
@@ -97,28 +98,34 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
     value is silent until a remap translates ids that were never in the space it assumed.
     `kind` (`ProjectionKind`) separates the projection a user makes and edits
     (`PROJECTION`) from the one that only exists to hold a draft started from a preset
-    such as last season's stats (`PRESET_DRAFT`), and from a board copied out of someone
+    such as last season's stats (`PRESET_DRAFT`), and from a board taken out of someone
     else's share link (`IMPORTED`) — and only `PROJECTION` is their own work to list. Callers
     that show "my projections" filter on it; the service stores whichever kind the request asks
     for (defaulting to `PROJECTION`). Only `PRESET_DRAFT` is limited (`isUniquePerUser()`): **one
     per preset** (`ProjectionPreset`: `last_season` or `model`), and a second for the same preset
     is a 409. A user's own projections are unlimited, now that one can be started from a copy of
-    another and kept beside it. `IMPORTED` never was limited: drafting against two friends'
-    boards is a normal thing to want, and so is copying the **same** board twice. The name is
+    another and kept beside it. `IMPORTED` is limited only per link: drafting against two
+    friends' boards is a normal thing to want, but a second **follow** of one link is not
+    (see `origin_share_token` below). The name is
     what has to stay distinct, and **create settles a clash rather than refusing it**:
     `UserProjectionService.create` asks `freeNameFrom` for a name, which is the one the caller
     sent or `"… (2)"`, `"… (3)"` and so on — the same shape `V19` used to break the ties
     already in the table, and truncated the same way so the suffix fits the hundred characters
     a name gets. So the saved name is **the one in the response**, not necessarily the one that
     was sent, and a caller that shows it has to read it back. `ProjectionImportService` does the
-    same for a board imported with no `name` (a name the **importer** typed is still refused —
-    that one they can see and change). A **rename** is refused with a 409 too: there the name is
+    same for the `"Copy of …"` it gives a copy of a shared board. A **rename** is refused with a 409 too: there the name is
     the whole of what was asked for, and the page that asked can say so. Create used to 409 on a
     taken name, which threw away work a user had already done over something they could rename
     afterwards.
-    An imported row is stamped with `origin_share_token` and `origin_author_username`
-    (surfaced as `ProjectionOrigin` on both responses), snapshotted at import time so the
-    credit survives the share going away.
+    A row stamped with `origin_share_token` (and `origin_author_username`, snapshotted; both
+    surfaced as `ProjectionOrigin`) is a **follow** of that link rather than a copy of it: it
+    holds the board the share holds, is renamed with it, **takes nothing from an update but
+    `data.draft`** (`UserProjection.updateDraft`), and is deleted with the share by the foreign
+    key `V25` adds. A user has at most one follow per link, and a follow is **outside the name
+    namespace** — the author names it, so their rename may never collide with a name the
+    follower chose. A spreadsheet import is `IMPORTED` with no token and stays the user's own
+    work in every respect. Whoever wants an editable board of their own takes a copy
+    (`/projections/copies`), which is a plain `PROJECTION` stamped with nothing.
   - `ProjectionData` — typed DTO: `settings` (`ProjectionSettings`) + `players`
     (`List<PlayerProjection>`). Per-player stats are validated **maps** (`stat → value`)
     keyed by the known stat vocabulary, so adding a stat needs no db-service change.
@@ -161,10 +168,11 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
     stored.) A player-id remap rewrites these rows — left on the old numbering they would hand
     every later importer ids the player pool has forgotten.
   - The `token` is 16 random bytes from `SecureRandom`, base64url-encoded, not the projection's
-    UUID. Publishing is **once and final**: sharing an already-shared projection returns the
-    share it has, untouched, and there is no endpoint to refresh or withdraw one. Deleting the
-    projection deletes the share with it (the row cascades) — that is the only thing that takes
-    a link down.
+    UUID, and it is never rewritten. A link **follows its projection**: sharing an already-shared
+    projection replaces the board behind the same token (the owner's editor publishes after every
+    save), and there is no endpoint to withdraw one. Deleting the projection deletes the share
+    with it, and the share takes every follow of it (both cascade) — that is the only thing that
+    takes a link down.
   - `ProjectionShareService` — copies name, season, settings and `positionOverrides` from the
     stored projection so a client cannot publish a page that misrepresents it, and **strips**
     from the settings what is the owner's rather than the projection's: the Yahoo/ESPN sync
@@ -176,16 +184,22 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
     travel *as well as* those positions, which already reflect them: the page renders off the
     rows, while an import needs to tell a correction from a position the read model reported,
     and a row cannot say which it is.
-  - `ProjectionImportService` / `ProjectionImportController` —
-    `POST /api/v1/users/{userId}/projections/imports`, which copies a share into the caller's
-    own projections by its token. Anyone holding a token may import; the copy is of the frozen
-    snapshot rather than the live projection behind it, because that snapshot is what the owner
-    consented to publish. It carries no draft (the author's picks were theirs) and takes its
-    season from the share, since the rows are that season's numbers. It **does** inherit the
-    author's `positionOverrides`: the published ranking was computed against those positions, so
-    a copy that moved players back onto the read model's would rank differently from the page it
-    was copied from. The importer can undo them like any of their own. A link published before
-    shares carried them inherits none, and starts on the reported positions.
+  - `ProjectionImportService` / `ProjectionImportController` — two ways to take a board out of a
+    link, both by token and both open to anyone holding one, and both refusing a board that has
+    changed since the reader read it (`seenUpdatedAt` → 412):
+    - `POST /api/v1/users/{userId}/projections/imports` **follows** it: an `IMPORTED` row
+      stamped with the token, which `ProjectionShareService.share` rewrites into on every later
+      publish (name, settings, rows and corrections; the follower's own draft stays). It is
+      idempotent — 201 the first time, 200 with the same row afterwards — and following your own
+      link is a 400, since that board is already in the account.
+    - `POST /api/v1/users/{userId}/projections/copies` takes an **own copy**: a `PROJECTION`
+      named `"Copy of <the share's name>"` (numbered if that is taken), stamped with nothing and
+      the user's to edit. The caller is left following the link as well, unless it is their own.
+    Both take the board as published rather than the live projection behind it, carry no draft
+    (the author's picks were theirs), take their season from the share, and inherit the author's
+    `positionOverrides` — the published ranking was computed against those positions, so a board
+    that moved players back onto the read model's would rank differently from the page it came
+    from. A link published before shares carried them inherits none.
   - `ProjectionShareController` — `/api/v1/users/{userId}/projections/{projectionId}/share`
     (get/put, ownership-scoped). `SharedProjectionController` —
     `GET /api/v1/shares/{token}`, the snapshot the BFF serves publicly; it returns no owner

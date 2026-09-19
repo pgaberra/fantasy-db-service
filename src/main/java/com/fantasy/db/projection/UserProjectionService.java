@@ -72,13 +72,15 @@ public class UserProjectionService {
 
     /**
      * Refuses a name the user is already keeping something else under. One namespace covers
-     * everything they can see and name — their own projections and the boards they imported —
+     * everything they name — their own projections and the spreadsheets they imported —
      * because those are listed together and read by name, so two rows sharing one are only told
      * apart by the smaller line beneath them.
      *
      * <p>A preset draft is outside it, in both directions: the server names one after its preset
      * and never lists it as the user's own work, so it neither takes a name from the user nor may
-     * be blocked by one they have taken.
+     * be blocked by one they have taken. So is a follow of a share link: the author names that
+     * one, and renames it whenever they like, so a rename of theirs must never collide with a
+     * name the follower chose (V25).
      *
      * <p>The partial unique index added in V19 says the same thing and is what makes it true under
      * a race. This check is what makes the failure legible: it names the projection that is in the
@@ -99,9 +101,9 @@ public class UserProjectionService {
             return;
         }
         boolean taken = excludedId == null
-                ? userProjectionRepository.existsByUserIdAndNameAndKindNot(
+                ? userProjectionRepository.existsByUserIdAndNameAndKindNotAndOriginShareTokenIsNull(
                         userId, name, ProjectionKind.PRESET_DRAFT)
-                : userProjectionRepository.existsByUserIdAndNameAndKindNotAndIdNot(
+                : userProjectionRepository.existsByUserIdAndNameAndKindNotAndOriginShareTokenIsNullAndIdNot(
                         userId, name, ProjectionKind.PRESET_DRAFT, excludedId);
         if (taken) {
             throw new DataIntegrityViolationException(
@@ -112,6 +114,10 @@ public class UserProjectionService {
     /**
      * The name a copy can actually be saved under: the preferred one where it is free, and
      * {@code "<preferred> (2)"}, {@code " (3)"} and so on where it is not.
+     *
+     * <p>A preferred name longer than the column takes is cut to fit before anything else: the
+     * names this is asked for are not all typed by a user, and {@code "Copy of "} in front of one
+     * at the cap makes a name no column would hold.
      *
      * <p>The same shape {@code V19} used when it had to break the ties already in the table, so a
      * board renamed by that migration and one imported today read alike. Truncated the same way
@@ -129,6 +135,9 @@ public class UserProjectionService {
      * refused, because there the name is the whole of what was asked for.
      */
     public String freeNameFrom(UUID userId, String preferred, ProjectionKind kind) {
+        preferred = preferred.length() > MAX_NAME_LENGTH
+                ? preferred.substring(0, MAX_NAME_LENGTH)
+                : preferred;
         if (kind == ProjectionKind.PRESET_DRAFT || !isTaken(userId, preferred)) {
             return preferred;
         }
@@ -142,7 +151,7 @@ public class UserProjectionService {
     }
 
     private boolean isTaken(UUID userId, String name) {
-        return userProjectionRepository.existsByUserIdAndNameAndKindNot(
+        return userProjectionRepository.existsByUserIdAndNameAndKindNotAndOriginShareTokenIsNull(
                 userId, name, ProjectionKind.PRESET_DRAFT);
     }
 
@@ -170,6 +179,13 @@ public class UserProjectionService {
      * initialises the field to an empty {@code ArrayList}, so a body that leaves {@code players}
      * out arrives here as empty rather than null. Treating that as "replace with nothing" wiped
      * every player from a projection the moment its owner changed a setting.
+     *
+     * <p><b>A follow of a share link takes only its draft.</b> The board, its name and its
+     * settings are the author's, mirrored in on every publish, so whatever else the request says
+     * is ignored rather than refused: draft mode and the clear-draft path send the settings and
+     * name back exactly as they loaded them, and a publish landing in between would otherwise
+     * turn a pick into an error. Enforced here rather than trusted to a caller, since this is the
+     * one write path every save goes through.
      */
     @Transactional
     public UserProjection update(UUID userId, UUID id, String name, UpdateProjectionData incoming) {
@@ -186,11 +202,16 @@ public class UserProjectionService {
     @Transactional
     public UserProjection update(UUID userId, UUID id, String name, UpdateProjectionData incoming,
                                  PlayerIdSpace callerSpace) {
-        UserProjection projection = findById(userId, id);
+        UserProjection projection = userProjectionRepository.findByIdAndUserIdForUpdate(id, userId)
+                .orElseThrow(() -> new NoSuchElementException("No projection found with id: " + id));
         if (callerSpace != null && callerSpace != projection.getPlayerIdSpace()) {
             throw new IllegalStateException(("This projection's player ids are %s's and the "
                     + "update was built from %s's player pool. Nothing was written.")
                     .formatted(projection.getPlayerIdSpace().getCode(), callerSpace.getCode()));
+        }
+        if (projection.isFollow()) {
+            projection.updateDraft(incoming.draft());
+            return userProjectionRepository.save(projection);
         }
         // A rename has to answer to the same rule a new name does, or the rule is only a rule
         // until someone edits. Its own row is not the conflict.
