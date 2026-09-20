@@ -65,14 +65,14 @@ public class ProjectionImportController {
             description = "The copy is the board as it is published now, named "
                     + "\"Copy of <the share's name>\" (numbered where the user holds that name "
                     + "already), with no draft and no link back to the share: it is theirs to "
-                    + "edit, and nothing the author publishes afterwards reaches it. The user is "
-                    + "left following the link as well, unless the link is their own board.")
+                    + "edit, and nothing the author publishes afterwards reaches it. Copying does "
+                    + "not follow the link and does not touch a follow the user already has; to "
+                    + "follow it, call `/projections/imports`. A user may copy their own board.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Copy created"),
         @ApiResponse(responseCode = "400", description = "Validation failed (blank or oversized token)"),
         @ApiResponse(responseCode = "404", description = "No share with that token"),
-        @ApiResponse(responseCode = "409", description = "A request racing this one took the name "
-                + "or created the follow"),
+        @ApiResponse(responseCode = "409", description = "A request racing this one took the name"),
         @ApiResponse(responseCode = "412", description = "`seenUpdatedAt` was sent and the board "
                 + "has changed since. Nothing was written; read the share again and retry.")
     })
