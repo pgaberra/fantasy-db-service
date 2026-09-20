@@ -211,7 +211,8 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
       link is a 400, since that board is already in the account.
     - `POST /api/v1/users/{userId}/projections/copies` takes an **own copy**: a `PROJECTION`
       named `"Copy of <the share's name>"` (numbered if that is taken), stamped with nothing and
-      the user's to edit. The caller is left following the link as well, unless it is their own.
+      the user's to edit. It creates **nothing else**: no follow, and a follow the caller already
+      has is left untouched. Copying your own link is allowed, since the copy has no link back.
     Both take the board as published rather than the live projection behind it, carry no draft
     (the author's picks were theirs), take their season from the share, and inherit the author's
     `positionOverrides` — the published ranking was computed against those positions, so a board
