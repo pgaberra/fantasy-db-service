@@ -460,29 +460,32 @@ class ProjectionImportServiceTest {
         assertThat(copy.getData().settings().statWeights()).containsEntry("goals", 4.5);
     }
 
-    /** A reader who copies a board has said it is one they want, so they keep the link too. */
+    /** One press does one thing: a copy is a copy, and following is a separate call. */
     @Test
-    void copyingALinkAlsoStartsFollowingIt() {
+    void copyingALinkDoesNotFollowIt() {
         String token = share("My league");
 
         projectionImportService.copy(readerId, token, null);
 
         assertThat(userProjectionRepository.findByUserIdAndOriginShareToken(readerId, token))
-                .isPresent();
-        assertThat(userProjectionService.findAll(readerId)).hasSize(2);
+                .isEmpty();
+        assertThat(userProjectionService.findAll(readerId)).hasSize(1);
     }
 
+    /** A follow the reader already has is neither used nor disturbed by a copy. */
     @Test
-    void copyingALinkAlreadyFollowedAddsNoSecondFollow() {
+    void copyingALinkAlreadyFollowedLeavesTheFollowAlone() {
         String token = share("My league");
-        follow(token);
+        UUID followId = follow(token).getId();
 
         projectionImportService.copy(readerId, token, null);
 
+        assertThat(userProjectionRepository.findByUserIdAndOriginShareToken(readerId, token))
+                .map(UserProjection::getId).contains(followId);
         assertThat(userProjectionService.findAll(readerId)).hasSize(2);
     }
 
-    /** Nobody follows their own board, but they may take a second copy of it. */
+    /** Nobody follows their own board, but they may take a copy of it. */
     @Test
     void copiesYourOwnLinkWithoutFollowingIt() {
         Author author = author("My league");

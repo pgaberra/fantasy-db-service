@@ -25,6 +25,9 @@ import java.util.UUID;
  * it. What is followed or copied is the published board, not the projection behind it. The two
  * agree once the owner's editor has published its last save, but not while a save is still on its
  * way or when a publish failed, and the reader has to get the board the link showed.
+ *
+ * <p>The two are independent: copying never follows, and following never copies. Each endpoint
+ * does the one thing it is named after, so a client that wants both makes both calls.
  */
 @Service
 public class ProjectionImportService {
@@ -87,10 +90,13 @@ public class ProjectionImportService {
      * Takes the board out of a link and into the user's own projections, where it is theirs: their
      * name for it, their numbers to change, and untouched by whatever the author publishes next.
      *
-     * <p>The user ends up following the link as well, unless it is their own. The copy is the
-     * board at one moment, and the link is where the author's board goes on living; a reader who
-     * copies it has said that is a board they want, and losing sight of it by copying it would be
-     * the wrong way round.
+     * <p>Copying does <b>not</b> follow the link, and does not touch a follow the user already
+     * has: one press does one thing. Following is what {@link #follow} is for, and a reader who
+     * wants both presses both.
+     *
+     * <p>Copying your own link is allowed, unlike following it: a copy is a new row with no link
+     * back, so it is a duplicate of a board the user already owns rather than a projection
+     * mirroring into itself.
      *
      * <p>The copy is offered as {@code "Copy of <the share's name>"}, numbered if the user already
      * holds that name, because that name is the server's suggestion and not worth refusing a copy
@@ -99,11 +105,6 @@ public class ProjectionImportService {
     @Transactional
     public UserProjection copy(UUID userId, String token, Instant seenUpdatedAt) {
         ProjectionShare share = readable(token, seenUpdatedAt);
-        if (!share.getUserId().equals(userId)
-                && userProjectionRepository.findByUserIdAndOriginShareToken(userId, share.getToken())
-                        .isEmpty()) {
-            create(userId, share);
-        }
         String name = userProjectionService.freeNameFrom(
                 userId, COPY_NAME_PREFIX + share.getName(), ProjectionKind.PROJECTION);
         userProjectionService.requireFreeName(userId, name, ProjectionKind.PROJECTION, null);
