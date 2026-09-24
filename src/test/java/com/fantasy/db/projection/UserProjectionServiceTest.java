@@ -9,6 +9,7 @@ import com.fantasy.db.projection.dto.PositionOverride;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
 import com.fantasy.db.projection.dto.UpdateProjectionData;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -33,6 +34,9 @@ class UserProjectionServiceTest {
 
     @Autowired
     private UserProjectionRepository userProjectionRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private final UUID userId = UUID.randomUUID();
 
@@ -416,7 +420,7 @@ class UserProjectionServiceTest {
 
     private static DraftState draft(int playerId) {
         return new DraftState(List.of(new DraftTeam("t1", "Mine", true)), List.of("t1"),
-                List.of(new DraftPick(playerId, "t1")), null, null);
+                List.of(new DraftPick(playerId, "t1")), null, null, null);
     }
 
     /**
@@ -638,6 +642,45 @@ class UserProjectionServiceTest {
         UserProjection unchanged = userProjectionService.renameDerived(userId, draft.getId(), "Beer League");
 
         assertThat(unchanged.getName()).isEqualTo("Mock #3");
+    }
+
+    /**
+     * Whether a draft follows its league is saved with it, in the jsonb, so a reload - on this
+     * device or another - picks the league's draft back up instead of leaving sync off.
+     */
+    @Test
+    void keepsWhetherADraftFollowsItsLeagueThroughStorage() {
+        UserProjection board = create("My league");
+        UserProjection draft = userProjectionService.startDraft(userId, board.getId(), null,
+                new ProjectionData(sampleData().settings(), List.of(), following(true), null));
+
+        assertThat(reload(draft.getId()).getData().draft().following()).isTrue();
+
+        userProjectionService.update(userId, draft.getId(), draft.getName(),
+                new UpdateProjectionData(sampleData().settings(), null, following(false), null));
+
+        assertThat(reload(draft.getId()).getData().draft().following()).isFalse();
+    }
+
+    /** A draft stored before the switch was, or never synced, reads as not following. */
+    @Test
+    void aDraftThatNeverFollowedSaysNothingAboutIt() {
+        UserProjection board = create("My league");
+        UserProjection draft = userProjectionService.startDraft(userId, board.getId(), null,
+                new ProjectionData(sampleData().settings(), List.of(), draft(1), null));
+
+        assertThat(reload(draft.getId()).getData().draft().following()).isNull();
+    }
+
+    private static DraftState following(boolean following) {
+        DraftState draft = draft(1);
+        return new DraftState(draft.teams(), draft.order(), draft.picks(), null, null, following);
+    }
+
+    private UserProjection reload(UUID id) {
+        entityManager.flush();
+        entityManager.clear();
+        return userProjectionRepository.findById(id).orElseThrow();
     }
 
     private UserProjection draft(String name) {

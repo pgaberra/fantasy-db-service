@@ -16,5 +16,7 @@ public record DraftState(
         @Schema(description = "When the manager marked this draft finished (ISO-8601, UTC). Absent while the draft is still in progress.")
         Instant finishedAt,
         @Schema(description = "The league this draft is ranked by, set up with the draft. Absent on a draft saved before drafts held their own league, which is ranked by the projection's settings instead.")
-        @Valid DraftSettings settings
+        @Valid DraftSettings settings,
+        @Schema(description = "Whether the board follows its linked league's live draft: the sync switch as the user left it, so a reload picks the league's draft back up. Absent on a board that never followed, which reads as not following.")
+        Boolean following
 ) {}
