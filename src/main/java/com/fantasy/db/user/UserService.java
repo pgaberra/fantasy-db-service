@@ -77,27 +77,30 @@ public class UserService {
     /**
      * Resolves the account for a verified Google identity: returns the user already
      * linked to this Google subject, otherwise links it to an existing account with the
-     * same (verified) email, otherwise creates a new password-less Google user.
+     * same (verified) email, otherwise creates a new password-less Google user. Only the
+     * last reports {@code created}: an account another request created concurrently was
+     * not created by this one.
      */
     @Transactional
-    public User findOrCreateGoogleUser(String email, String googleSub) {
+    public ResolvedUser findOrCreateGoogleUser(String email, String googleSub) {
         Optional<User> byGoogle = userRepository.findByGoogleSub(googleSub);
         if (byGoogle.isPresent()) {
-            return byGoogle.get();
+            return ResolvedUser.existing(byGoogle.get());
         }
         Optional<User> byEmail = userRepository.findByEmailIgnoreCase(email);
         if (byEmail.isPresent()) {
             User existing = byEmail.get();
             existing.linkGoogle(googleSub);
-            return existing;
+            return ResolvedUser.existing(existing);
         }
         try {
-            return userRepository.save(User.createWithGoogle(email, googleSub));
+            return ResolvedUser.created(userRepository.save(User.createWithGoogle(email, googleSub)));
         } catch (DataIntegrityViolationException e) {
             // A concurrent request created the same email/subject; the unique indexes are
             // the source of truth, so re-read whichever now exists.
             return userRepository.findByGoogleSub(googleSub)
                     .or(() -> userRepository.findByEmailIgnoreCase(email))
+                    .map(ResolvedUser::existing)
                     .orElseThrow(() -> e);
         }
     }
@@ -105,25 +108,27 @@ public class UserService {
     /**
      * Resolves the account for a verified Facebook identity: returns the user already
      * linked to this Facebook subject, otherwise links it to an existing account with the
-     * same (verified) email, otherwise creates a new password-less Facebook user.
+     * same (verified) email, otherwise creates a new password-less Facebook user. Only the
+     * last reports {@code created}.
      */
     @Transactional
-    public User findOrCreateFacebookUser(String email, String facebookSub) {
+    public ResolvedUser findOrCreateFacebookUser(String email, String facebookSub) {
         Optional<User> byFacebook = userRepository.findByFacebookSub(facebookSub);
         if (byFacebook.isPresent()) {
-            return byFacebook.get();
+            return ResolvedUser.existing(byFacebook.get());
         }
         Optional<User> byEmail = userRepository.findByEmailIgnoreCase(email);
         if (byEmail.isPresent()) {
             User existing = byEmail.get();
             existing.linkFacebook(facebookSub);
-            return existing;
+            return ResolvedUser.existing(existing);
         }
         try {
-            return userRepository.save(User.createWithFacebook(email, facebookSub));
+            return ResolvedUser.created(userRepository.save(User.createWithFacebook(email, facebookSub)));
         } catch (DataIntegrityViolationException e) {
             return userRepository.findByFacebookSub(facebookSub)
                     .or(() -> userRepository.findByEmailIgnoreCase(email))
+                    .map(ResolvedUser::existing)
                     .orElseThrow(() -> e);
         }
     }
