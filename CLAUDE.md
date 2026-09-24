@@ -61,10 +61,11 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
     - `GET /api/v1/users/{userId}` → user (404 if missing)
     - `GET /api/v1/users/exists?email=` → `{ "exists": bool }`
     - `POST /api/v1/users` → 201 created (password user)
-    - `POST /api/v1/users/google` → 200; find-or-create-or-link for a verified Google
+    - `POST /api/v1/users/google` → 201 when this call created the account, else
+      200; find-or-create-or-link for a verified Google
       identity (`{ email, googleSub }`). Resolves by `google_sub`, else links to an
       existing same-email account, else creates a password-less user.
-    - `POST /api/v1/users/facebook` → 200; the same for a verified Facebook identity, by
+    - `POST /api/v1/users/facebook` → 201 / 200 likewise; the same for a verified Facebook identity, by
       `facebook_sub`.
     - `POST /api/v1/users/{userId}/sessions/revoke` → 204; bumps `token_version`, which ends
       every session the account holds ("sign out everywhere"; the BFF refuses a refresh token

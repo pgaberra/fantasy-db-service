@@ -107,7 +107,7 @@ class UserControllerTest {
     void googleEndpointReturnsResolvedUser() throws Exception {
         User user = User.createWithGoogle("gabe@example.com", "google-99");
         when(userService.findOrCreateGoogleUser(eq("gabe@example.com"), eq("google-99")))
-                .thenReturn(user);
+                .thenReturn(new ResolvedUser(user, false));
 
         mockMvc.perform(post("/api/v1/users/google")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -115,6 +115,19 @@ class UserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("gabe@example.com"))
                 .andExpect(jsonPath("$.googleSub").value("google-99"));
+    }
+
+    @Test
+    void googleEndpointReturns201WhenItCreatedTheUser() throws Exception {
+        User user = User.createWithGoogle("gwen@example.com", "google-100");
+        when(userService.findOrCreateGoogleUser(eq("gwen@example.com"), eq("google-100")))
+                .thenReturn(new ResolvedUser(user, true));
+
+        mockMvc.perform(post("/api/v1/users/google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"gwen@example.com\",\"googleSub\":\"google-100\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.googleSub").value("google-100"));
     }
 
     @Test
@@ -129,7 +142,7 @@ class UserControllerTest {
     void facebookEndpointReturnsResolvedUser() throws Exception {
         User user = User.createWithFacebook("faye@example.com", "facebook-99");
         when(userService.findOrCreateFacebookUser(eq("faye@example.com"), eq("facebook-99")))
-                .thenReturn(user);
+                .thenReturn(new ResolvedUser(user, false));
 
         mockMvc.perform(post("/api/v1/users/facebook")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -137,6 +150,19 @@ class UserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("faye@example.com"))
                 .andExpect(jsonPath("$.facebookSub").value("facebook-99"));
+    }
+
+    @Test
+    void facebookEndpointReturns201WhenItCreatedTheUser() throws Exception {
+        User user = User.createWithFacebook("finn@example.com", "facebook-100");
+        when(userService.findOrCreateFacebookUser(eq("finn@example.com"), eq("facebook-100")))
+                .thenReturn(new ResolvedUser(user, true));
+
+        mockMvc.perform(post("/api/v1/users/facebook")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"finn@example.com\",\"facebookSub\":\"facebook-100\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.facebookSub").value("facebook-100"));
     }
 
     @Test

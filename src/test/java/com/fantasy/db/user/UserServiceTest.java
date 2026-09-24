@@ -37,8 +37,32 @@ class UserServiceTest {
     }
 
     @Test
+    void reportsAGoogleUserAsCreatedOnlyWhenThisCallCreatedIt() {
+        ResolvedUser first = userService.findOrCreateGoogleUser("new@example.com", "google-new");
+        ResolvedUser again = userService.findOrCreateGoogleUser("new@example.com", "google-new");
+        userService.create("linked@example.com", "hashed");
+        ResolvedUser linked = userService.findOrCreateGoogleUser("linked@example.com", "google-linked");
+
+        assertThat(first.created()).isTrue();
+        assertThat(again.created()).isFalse();
+        assertThat(linked.created()).isFalse();
+    }
+
+    @Test
+    void reportsAFacebookUserAsCreatedOnlyWhenThisCallCreatedIt() {
+        ResolvedUser first = userService.findOrCreateFacebookUser("fbnew@example.com", "facebook-new");
+        ResolvedUser again = userService.findOrCreateFacebookUser("fbnew@example.com", "facebook-new");
+        userService.create("fblinked@example.com", "hashed");
+        ResolvedUser linked = userService.findOrCreateFacebookUser("fblinked@example.com", "facebook-linked");
+
+        assertThat(first.created()).isTrue();
+        assertThat(again.created()).isFalse();
+        assertThat(linked.created()).isFalse();
+    }
+
+    @Test
     void createsPasswordLessGoogleUserWhenNoneExists() {
-        User user = userService.findOrCreateGoogleUser("gina@example.com", "google-1");
+        User user = userService.findOrCreateGoogleUser("gina@example.com", "google-1").user();
 
         assertThat(user.getId()).isNotNull();
         assertThat(user.getPasswordHash()).isNull();
@@ -50,7 +74,7 @@ class UserServiceTest {
         User passwordUser = userService.create("link@example.com", "hashed");
         passwordUser.markEmailVerified();
 
-        User linked = userService.findOrCreateGoogleUser("link@example.com", "google-2");
+        User linked = userService.findOrCreateGoogleUser("link@example.com", "google-2").user();
 
         assertThat(linked.getId()).isEqualTo(passwordUser.getId());
         assertThat(linked.getGoogleSub()).isEqualTo("google-2");
@@ -63,7 +87,7 @@ class UserServiceTest {
         // Someone registered this address with a password but never proved they own it.
         User preRegistered = userService.create("victim@example.com", "attackers-hash");
 
-        User linked = userService.findOrCreateGoogleUser("victim@example.com", "google-owner");
+        User linked = userService.findOrCreateGoogleUser("victim@example.com", "google-owner").user();
 
         assertThat(linked.getId()).isEqualTo(preRegistered.getId());
         assertThat(linked.getPasswordHash()).isNull();
@@ -73,16 +97,16 @@ class UserServiceTest {
 
     @Test
     void returnsTheSameUserForARepeatedGoogleLogin() {
-        User first = userService.findOrCreateGoogleUser("repeat@example.com", "google-3");
+        User first = userService.findOrCreateGoogleUser("repeat@example.com", "google-3").user();
 
-        User second = userService.findOrCreateGoogleUser("repeat@example.com", "google-3");
+        User second = userService.findOrCreateGoogleUser("repeat@example.com", "google-3").user();
 
         assertThat(second.getId()).isEqualTo(first.getId());
     }
 
     @Test
     void createsPasswordLessFacebookUserWhenNoneExists() {
-        User user = userService.findOrCreateFacebookUser("fern@example.com", "facebook-1");
+        User user = userService.findOrCreateFacebookUser("fern@example.com", "facebook-1").user();
 
         assertThat(user.getId()).isNotNull();
         assertThat(user.getPasswordHash()).isNull();
@@ -94,7 +118,7 @@ class UserServiceTest {
         User passwordUser = userService.create("fblink@example.com", "hashed");
         passwordUser.markEmailVerified();
 
-        User linked = userService.findOrCreateFacebookUser("fblink@example.com", "facebook-2");
+        User linked = userService.findOrCreateFacebookUser("fblink@example.com", "facebook-2").user();
 
         assertThat(linked.getId()).isEqualTo(passwordUser.getId());
         assertThat(linked.getFacebookSub()).isEqualTo("facebook-2");
@@ -106,7 +130,7 @@ class UserServiceTest {
     void linkingFacebookToAnUnverifiedPasswordAccount_dropsThePasswordAndEndsItsSessions() {
         User preRegistered = userService.create("fbvictim@example.com", "attackers-hash");
 
-        User linked = userService.findOrCreateFacebookUser("fbvictim@example.com", "facebook-owner");
+        User linked = userService.findOrCreateFacebookUser("fbvictim@example.com", "facebook-owner").user();
 
         assertThat(linked.getId()).isEqualTo(preRegistered.getId());
         assertThat(linked.getPasswordHash()).isNull();
@@ -116,9 +140,9 @@ class UserServiceTest {
 
     @Test
     void returnsTheSameUserForARepeatedFacebookLogin() {
-        User first = userService.findOrCreateFacebookUser("fbrepeat@example.com", "facebook-3");
+        User first = userService.findOrCreateFacebookUser("fbrepeat@example.com", "facebook-3").user();
 
-        User second = userService.findOrCreateFacebookUser("fbrepeat@example.com", "facebook-3");
+        User second = userService.findOrCreateFacebookUser("fbrepeat@example.com", "facebook-3").user();
 
         assertThat(second.getId()).isEqualTo(first.getId());
     }

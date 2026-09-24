@@ -72,27 +72,36 @@ public class UserController {
 
     @Operation(summary = "Resolve the account for a verified Google identity",
             description = "Returns the user linked to this Google subject, linking it to an "
-                    + "existing account with the same email or creating a new password-less user.")
+                    + "existing account with the same email or creating a new password-less user. "
+                    + "Answers 201 only when this call created the account.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "User resolved (found, linked, or created)"),
+        @ApiResponse(responseCode = "200", description = "Existing user found, or linked by email"),
+        @ApiResponse(responseCode = "201", description = "New user created"),
         @ApiResponse(responseCode = "400", description = "Validation failed (blank email / subject)")
     })
     @PostMapping("/google")
-    public UserResponse findOrCreateGoogleUser(@Valid @RequestBody GoogleUserRequest request) {
-        return UserResponse.from(userService.findOrCreateGoogleUser(request.email(), request.googleSub()));
+    public ResponseEntity<UserResponse> findOrCreateGoogleUser(@Valid @RequestBody GoogleUserRequest request) {
+        return resolved(userService.findOrCreateGoogleUser(request.email(), request.googleSub()));
     }
 
     @Operation(summary = "Resolve the account for a verified Facebook identity",
             description = "Returns the user linked to this Facebook subject, linking it to an "
-                    + "existing account with the same email or creating a new password-less user.")
+                    + "existing account with the same email or creating a new password-less user. "
+                    + "Answers 201 only when this call created the account.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "User resolved (found, linked, or created)"),
+        @ApiResponse(responseCode = "200", description = "Existing user found, or linked by email"),
+        @ApiResponse(responseCode = "201", description = "New user created"),
         @ApiResponse(responseCode = "400", description = "Validation failed (blank email / subject)")
     })
     @PostMapping("/facebook")
-    public UserResponse findOrCreateFacebookUser(@Valid @RequestBody FacebookUserRequest request) {
-        return UserResponse.from(
-                userService.findOrCreateFacebookUser(request.email(), request.facebookSub()));
+    public ResponseEntity<UserResponse> findOrCreateFacebookUser(
+            @Valid @RequestBody FacebookUserRequest request) {
+        return resolved(userService.findOrCreateFacebookUser(request.email(), request.facebookSub()));
+    }
+
+    private static ResponseEntity<UserResponse> resolved(ResolvedUser resolved) {
+        HttpStatus status = resolved.created() ? HttpStatus.CREATED : HttpStatus.OK;
+        return ResponseEntity.status(status).body(UserResponse.from(resolved.user()));
     }
     @Operation(summary = "Set the account's public name",
             description = "Nullable on the account until it is set; sharing a projection requires it.")
