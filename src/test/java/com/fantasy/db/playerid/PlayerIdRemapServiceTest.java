@@ -110,7 +110,7 @@ class PlayerIdRemapServiceTest {
             picks.add(new DraftPick(playerId, "team-1"));
         }
         return new DraftState(List.of(new DraftTeam("team-1", "Mine", true)),
-                List.of("team-1"), picks, null, null);
+                List.of("team-1"), picks, null, null, null);
     }
 
     private ProjectionShare storeShare(int playerId) {
@@ -173,12 +173,26 @@ class PlayerIdRemapServiceTest {
                 List.of("goals"), List.of("gp"), 10, new RosterSlots(2, 2, 2, 4, 1, 4, 2), 84,
                 null, null, null);
         UserProjection projection = storeProjection(new DraftState(picks.teams(), picks.order(),
-                picks.picks(), null, league), YAHOO_MCDAVID);
+                picks.picks(), null, league, null), YAHOO_MCDAVID);
 
         remapService.remap(request(false, mcDavid()));
 
         UserProjection stored = projectionRepository.findById(projection.getId()).orElseThrow();
         assertThat(stored.getData().draft().settings()).isEqualTo(league);
+        assertThat(stored.getData().draft().picks().getFirst().playerId()).isEqualTo(ESPN_MCDAVID);
+    }
+
+    /** A remap rewrites the picks, not the draft: a board left following its league still is. */
+    @Test
+    void keepsWhetherADraftFollowsItsLeague() {
+        DraftState picks = draftWith(YAHOO_MCDAVID);
+        UserProjection projection = storeProjection(new DraftState(picks.teams(), picks.order(),
+                picks.picks(), null, null, true), YAHOO_MCDAVID);
+
+        remapService.remap(request(false, mcDavid()));
+
+        UserProjection stored = projectionRepository.findById(projection.getId()).orElseThrow();
+        assertThat(stored.getData().draft().following()).isTrue();
         assertThat(stored.getData().draft().picks().getFirst().playerId()).isEqualTo(ESPN_MCDAVID);
     }
 

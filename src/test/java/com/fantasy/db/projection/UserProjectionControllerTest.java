@@ -139,6 +139,7 @@ class UserProjectionControllerTest {
                 List.of("t1"),
                 List.of(new DraftPick(1, "t1")),
                 finishedAt,
+                null,
                 null);
     }
 
@@ -403,6 +404,64 @@ class UserProjectionControllerTest {
         assertThat(league.minGoalieGames()).isEqualTo(84);
         assertThat(league.espnSync().leagueId()).isEqualTo("42");
     }
+
+    /**
+     * The sync switch is saved with the draft and served back with it, so the page that reopens
+     * the draft reads whether it was left following its league.
+     */
+    @Test
+    void updateTakesAndReturnsWhetherADraftFollowsItsLeague() throws Exception {
+        ArgumentCaptor<UpdateProjectionData> sent = ArgumentCaptor.forClass(UpdateProjectionData.class);
+        DraftState followed = new DraftState(List.of(new DraftTeam("t1", "Me", true)), List.of("t1"),
+                List.of(), null, null, true);
+        when(userProjectionService.update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), any(), eq(PlayerIdSpace.ESPN)))
+                .thenReturn(projection("My league", followed, ProjectionKind.DRAFT));
+
+        mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(FOLLOWING_DRAFT_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.draft.following").value(true));
+
+        verify(userProjectionService).update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), sent.capture(), eq(PlayerIdSpace.ESPN));
+        assertThat(sent.getValue().draft()).isEqualTo(followed);
+    }
+
+    /** A draft saved before the switch was stored says nothing about it, rather than false. */
+    @Test
+    void getLeavesFollowingOutOfADraftThatNeverFollowed() throws Exception {
+        when(userProjectionService.findById(USER_ID, PROJECTION_ID))
+                .thenReturn(projection("My league", draft(null), ProjectionKind.DRAFT));
+
+        mockMvc.perform(get("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.draft.picks[0].playerId").value(1))
+                .andExpect(jsonPath("$.data.draft.following").doesNotExist());
+    }
+
+    private static final String FOLLOWING_DRAFT_BODY = """
+            {
+              "name": "My league",
+              "playerIdSpace": "espn",
+              "data": {
+                "settings": {
+                  "scoringType": "points",
+                  "statWeights": { "goals": 4.5 },
+                  "activeScoringColumns": ["goals"],
+                  "activeUtilityColumns": ["gp"],
+                  "scaleSettings": {},
+                  "decimalSettings": { "goals": 0 },
+                  "useDefaultDecimals": true
+                },
+                "draft": {
+                  "teams": [{ "id": "t1", "name": "Me", "mine": true }],
+                  "order": ["t1"],
+                  "picks": [],
+                  "following": true
+                }
+              }
+            }
+            """;
 
     @Test
     void updateRejectsAGoalieMinimumLongerThanASeason() throws Exception {

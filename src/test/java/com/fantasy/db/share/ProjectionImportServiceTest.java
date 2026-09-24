@@ -278,6 +278,22 @@ class ProjectionImportServiceTest {
     }
 
     /**
+     * Whether a draft follows its league is part of the draft, and the draft stays the author's:
+     * neither a follow nor a copy of the link may start syncing a league the reader never linked.
+     */
+    @Test
+    void neitherAFollowNorACopyTakesTheAuthorsLeagueSync() {
+        ProjectionData board = projectionData();
+        String token = share("My league", new ProjectionData(board.settings(), board.players(),
+                new DraftState(List.of(new DraftTeam("t1", "Author", true)), List.of("t1"),
+                        List.of(new DraftPick(1, "t1")), null, null, true),
+                board.positionOverrides()));
+
+        assertThat(follow(token).getData().draft()).isNull();
+        assertThat(projectionImportService.copy(readerId, token, null).getData().draft()).isNull();
+    }
+
+    /**
      * The button on a link is "follow", and pressing it twice is the same link. A second row
      * mirroring the same board would be a copy of it under the same author-given name, with
      * nothing in the list to tell the two apart.
@@ -371,7 +387,7 @@ class ProjectionImportServiceTest {
         UUID followId = follow(author.token()).getId();
         DraftState draft = new DraftState(
                 List.of(new DraftTeam("t1", "Mine", true)), List.of("t1"),
-                List.of(new DraftPick(1, "t1")), null, null);
+                List.of(new DraftPick(1, "t1")), null, null, true);
         userProjectionService.update(readerId, followId, "My league",
                 new UpdateProjectionData(projectionData().settings(), null, draft, null));
 

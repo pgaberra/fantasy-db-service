@@ -234,7 +234,8 @@ public class PlayerIdRemapService {
                     ? pick
                     : new DraftPick(placed, pick.teamId()));
         }
-        return new DraftState(draft.teams(), draft.order(), picks, draft.finishedAt(), draft.settings());
+        return new DraftState(draft.teams(), draft.order(), picks, draft.finishedAt(), draft.settings(),
+                draft.following());
     }
 
     private SharedProjectionData remap(SharedProjectionData data, Tally tally) {
