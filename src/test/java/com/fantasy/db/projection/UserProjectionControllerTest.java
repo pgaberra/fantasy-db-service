@@ -9,6 +9,7 @@ import com.fantasy.db.projection.dto.PlayerProjection;
 import com.fantasy.db.projection.dto.PlayerStats;
 import com.fantasy.db.projection.dto.ProjectionData;
 import com.fantasy.db.projection.dto.ProjectionSettings;
+import com.fantasy.db.projection.dto.RosterSlots;
 import com.fantasy.db.projection.dto.UpdateProjectionData;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -348,6 +349,11 @@ class UserProjectionControllerTest {
 
     /** A body whose draft carries its own league, with the goalie minimum set to {@code games}. */
     private static String bodyWithDraftLeague(int games) {
+        return bodyWithDraftLeague(games, """
+                { "c": 2, "lw": 2, "rw": 2, "d": 4, "util": 1, "bn": 4, "g": 2 }""");
+    }
+
+    private static String bodyWithDraftLeague(int games, String rosterSlots) {
         return """
                 {
                   "name": "My league",
@@ -372,14 +378,14 @@ class UserProjectionControllerTest {
                         "activeScoringColumns": ["goals", "hits"],
                         "activeUtilityColumns": ["gp"],
                         "leagueSize": 10,
-                        "rosterSlots": { "c": 2, "lw": 2, "rw": 2, "d": 4, "util": 1, "bn": 4, "g": 2 },
+                        "rosterSlots": %s,
                         "minGoalieGames": %d,
                         "espnSync": { "leagueName": "Puck Luck", "leagueId": "42", "syncedAt": "2026-09-17T08:00:00Z" }
                       }
                     }
                   }
                 }
-                """.formatted(games);
+                """.formatted(rosterSlots, games);
     }
 
     /**
@@ -403,6 +409,60 @@ class UserProjectionControllerTest {
         assertThat(league.leagueSize()).isEqualTo(10);
         assertThat(league.minGoalieGames()).isEqualTo(84);
         assertThat(league.espnSync().leagueId()).isEqualTo("42");
+    }
+
+    /** An ESPN league of nine forwards and a Yahoo league with wing slots both keep their flex slots. */
+    @Test
+    void updateTakesTheForwardAndWingFlexSlots() throws Exception {
+        ArgumentCaptor<UpdateProjectionData> sent = ArgumentCaptor.forClass(UpdateProjectionData.class);
+        when(userProjectionService.update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), any(), eq(PlayerIdSpace.ESPN)))
+                .thenReturn(projection("My league"));
+
+        mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithDraftLeague(25, """
+                                { "c": 0, "lw": 0, "rw": 0, "w": 2, "f": 9, "d": 5, "util": 1, "bn": 5, "g": 2 }""")))
+                .andExpect(status().isOk());
+
+        verify(userProjectionService).update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), sent.capture(), eq(PlayerIdSpace.ESPN));
+        RosterSlots slots = sent.getValue().draft().settings().rosterSlots();
+        assertThat(slots.f()).isEqualTo(9);
+        assertThat(slots.w()).isEqualTo(2);
+        assertThat(slots.util()).isEqualTo(1);
+    }
+
+    /** A board saved before the flex slots existed, or a caller that predates them, has none. */
+    @Test
+    void rosterSlotsWithoutTheFlexSlotsReadAsNone() throws Exception {
+        ArgumentCaptor<UpdateProjectionData> sent = ArgumentCaptor.forClass(UpdateProjectionData.class);
+        when(userProjectionService.update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), any(), eq(PlayerIdSpace.ESPN)))
+                .thenReturn(projection("My league"));
+
+        mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithDraftLeague(25)))
+                .andExpect(status().isOk());
+
+        verify(userProjectionService).update(eq(USER_ID), eq(PROJECTION_ID), eq("My league"), sent.capture(), eq(PlayerIdSpace.ESPN));
+        RosterSlots slots = sent.getValue().draft().settings().rosterSlots();
+        assertThat(slots.f()).isZero();
+        assertThat(slots.w()).isZero();
+    }
+
+    @Test
+    void updateRefusesAFlexSlotCountPastTheCap() throws Exception {
+        mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithDraftLeague(25, """
+                                { "c": 2, "lw": 2, "rw": 2, "f": 51, "d": 4, "util": 1, "bn": 4, "g": 2 }""")))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(put("/api/v1/users/{userId}/projections/{id}", USER_ID, PROJECTION_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithDraftLeague(25, """
+                                { "c": 2, "lw": 2, "rw": 2, "w": -1, "d": 4, "util": 1, "bn": 4, "g": 2 }""")))
+                .andExpect(status().isBadRequest());
+
+        verify(userProjectionService, never()).update(any(), any(), any(), any(), any());
     }
 
     /**

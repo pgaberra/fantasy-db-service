@@ -170,7 +170,7 @@ class PlayerIdRemapServiceTest {
     void keepsTheLeagueADraftHolds() {
         DraftState picks = draftWith(YAHOO_MCDAVID);
         DraftSettings league = new DraftSettings(ScoringType.CATEGORY, Map.of("goals", 4.5),
-                List.of("goals"), List.of("gp"), 10, new RosterSlots(2, 2, 2, 4, 1, 4, 2), 84,
+                List.of("goals"), List.of("gp"), 10, new RosterSlots(2, 2, 2, 0, 0, 4, 1, 4, 2), 84,
                 null, null, null);
         UserProjection projection = storeProjection(new DraftState(picks.teams(), picks.order(),
                 picks.picks(), null, league, null), YAHOO_MCDAVID);
