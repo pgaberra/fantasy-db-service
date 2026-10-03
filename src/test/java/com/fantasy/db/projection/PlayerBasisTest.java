@@ -14,6 +14,7 @@ class PlayerBasisTest {
             assertThat(PlayerBasis.fromCode(basis.getCode())).isEqualTo(basis);
         }
         assertThat(PlayerBasis.MODEL.getCode()).isEqualTo("model");
+        assertThat(PlayerBasis.REST_OF_SEASON.getCode()).isEqualTo("rest_of_season");
     }
 
     @Test
