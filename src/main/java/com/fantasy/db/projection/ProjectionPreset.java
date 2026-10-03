@@ -20,7 +20,13 @@ public enum ProjectionPreset {
     LAST_SEASON("last_season"),
 
     /** Every player at the projection model's estimate for the coming season. */
-    MODEL("model");
+    MODEL("model"),
+
+    /**
+     * Every player at the projection model's line for what is left of a season under way, so a
+     * draft started mid-season is drafted on the games still to come.
+     */
+    REST_OF_SEASON("rest_of_season");
 
     private final String code;
 

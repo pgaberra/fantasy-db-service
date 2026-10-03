@@ -9,14 +9,17 @@ import java.util.Arrays;
  * What a projection's player rows started from, and therefore what a player who joins the pool
  * later should be seeded with. {@code LAST_SEASON} means the rows began as the cached stat line
  * of the season before; {@code BLANK} means they began at zero; {@code MODEL} means they began
- * as the projection model's lines, so a newcomer takes the model's line where it has one. Absent
+ * as the projection model's lines, so a newcomer takes the model's line where it has one;
+ * {@code REST_OF_SEASON} means they began as the model's lines for the rest of a season under
+ * way, so a newcomer takes that line where it has one. Absent
  * on projections saved before this was recorded — the caller that reconciles the rows against
  * the player pool infers it once and stores the answer, and can only ever infer the first two.
  */
 public enum PlayerBasis {
     LAST_SEASON("last_season"),
     BLANK("blank"),
-    MODEL("model");
+    MODEL("model"),
+    REST_OF_SEASON("rest_of_season");
 
     private final String code;
 

@@ -275,6 +275,15 @@ class UserProjectionServiceTest {
     }
 
     @Test
+    void keepsADraftAgainstTheRestOfTheSeason() {
+        UserProjection rest = userProjectionService.create(userId, "Rest of Season",
+                ProjectionKind.DRAFT, ProjectionPreset.REST_OF_SEASON, sampleData(), PlayerIdSpace.YAHOO);
+
+        assertThat(userProjectionService.findById(userId, rest.getId()).getPreset())
+                .isEqualTo(ProjectionPreset.REST_OF_SEASON);
+    }
+
+    @Test
     void findByIdIsScopedToOwner() {
         UserProjection mine = create("Mine");
 
