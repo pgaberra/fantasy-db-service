@@ -275,7 +275,11 @@ SPRING_PROFILES_ACTIVE=local DB_PASSWORD=… INTERNAL_API_KEY=… ./gradlew boot
   `IllegalArgumentException` → 400, `IllegalStateException` → 409,
   `ConcurrentModificationException` → 412 for a stale read (a share copied after it changed),
   `DataIntegrityViolationException` → 409, `MethodArgumentNotValidException` → 400,
-  `NoResourceFoundException` → 404 for a path this build does not serve).
+  `NoResourceFoundException` → 404 for a path this build does not serve,
+  `ConstraintViolationException` / `MethodArgumentTypeMismatchException` → 400 without echoing
+  the value). The catch-all passes any other Spring MVC `ErrorResponse` with a 4xx status
+  (missing parameter, 405, …) through with its status and headers and no log; everything else
+  is a 500 logged at ERROR.
 
 ## Database & config
 
