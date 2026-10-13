@@ -2,18 +2,24 @@ package com.fantasy.db.exception;
 
 import com.fantasy.db.config.RequestBodyByteCountFilter;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Path;
 import org.apache.catalina.connector.ClientAbortException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.converter.HttpMessageNotWritableException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.ConcurrentModificationException;
@@ -75,6 +81,39 @@ public class GlobalExceptionHandler {
                 .map(err -> err.getField() + ": " + err.getDefaultMessage())
                 .collect(Collectors.joining(", "));
         return build(HttpStatus.BAD_REQUEST, message);
+    }
+
+    /**
+     * A request parameter that breaks its constraint on a controller validated through its
+     * class-level {@code @Validated} proxy. That proxy raises Bean Validation's own exception,
+     * which is not one of Spring MVC's refusals, so the catch-all cannot tell it from a fault.
+     * The message names the parameter and the rule, never the value it rejected.
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorDto> handleConstraintViolation(ConstraintViolationException e) {
+        String message = e.getConstraintViolations().stream()
+                .map(violation -> parameterName(violation) + ": " + violation.getMessage())
+                .sorted()
+                .collect(Collectors.joining(", "));
+        return build(HttpStatus.BAD_REQUEST, message);
+    }
+
+    private static String parameterName(ConstraintViolation<?> violation) {
+        String name = "";
+        for (Path.Node node : violation.getPropertyPath()) {
+            name = node.getName();
+        }
+        return name;
+    }
+
+    /**
+     * A query or path parameter that does not convert to its declared type — a user id that is not
+     * a UUID. Without this the catch-all answers it with a 500 and a stack trace. The rejected value
+     * is not echoed back.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorDto> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        return build(HttpStatus.BAD_REQUEST, "Invalid value for parameter '" + e.getName() + "'");
     }
 
     /**
@@ -165,8 +204,26 @@ public class GlobalExceptionHandler {
         return false;
     }
 
+    /**
+     * Anything no handler above names. Most of it is a fault: a 500, logged with its trace. But
+     * Spring MVC's own refusals ({@link ErrorResponse}: a required parameter left out, one that
+     * breaks a constraint Spring checks itself, a method the path does not serve) carry the status
+     * they mean, and a 4xx among them is the caller's mistake, not a fault here. Taking those for
+     * faults sent Sentry an ERROR for every one. They answer with their status and its reason
+     * phrase, and keep their headers, so a 405 still says which methods the path allows. The body
+     * is JSON whatever the request's {@code Accept} said, or a 406 could not be written at all.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorDto> handleUnexpected(Exception e) {
+        if (e instanceof ErrorResponse refusal) {
+            HttpStatus status = HttpStatus.resolve(refusal.getStatusCode().value());
+            if (status != null && status.is4xxClientError()) {
+                return ResponseEntity.status(status)
+                        .headers(refusal.getHeaders())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(ErrorDto.of(status.value(), status.getReasonPhrase(), status.getReasonPhrase()));
+            }
+        }
         log.error("Unhandled exception", e);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
     }
